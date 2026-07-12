@@ -47,6 +47,21 @@ npm run job:drain-outbox  # publish domain events (+ optional webhook)
 npm run export:audit      # SIEM NDJSON
 ```
 
+## OCR + deterministic validation
+
+```
+image/text → OcrPort (mock today; Textract later)
+          → parseTextFields + Zod validators (deterministic)
+          → requiresManualReview flag
+          → wallet/ops ExtractedFields UI
+          → human CLEAR only
+```
+
+- Port: `src/lib/ports/ocr.ts`
+- Deterministic: `src/lib/ocr/deterministic.ts`
+- Service: `src/lib/services/ocr-service.ts`
+- Mock engine: `src/lib/adapters/ocr/mock.ts`
+
 ## Dual control
 
 CRITICAL categories (care, care-home robots, etc.) require **two distinct OPS/ADMIN reviewers** to CLEAR before VERIFIED / passport issue.

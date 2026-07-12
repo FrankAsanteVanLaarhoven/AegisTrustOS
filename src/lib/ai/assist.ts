@@ -6,6 +6,7 @@ import {
   evaluateChecklist,
   missingRequired,
 } from "@/lib/compliance/matrix";
+import { parseTextFields } from "@/lib/ocr/deterministic";
 
 export type AiSignal = {
   code: string;
@@ -26,28 +27,12 @@ export type AdvisoryAssessment = {
 const DISCLAIMER =
   "Advisory only. Automated document triage never clears or rejects applicants. Human adjudication required.";
 
-/** Heuristic extraction from free-text CV / notes */
+/** Deterministic free-text field parse (shared with OCR pipeline). */
 export function extractCredentialHints(text: string): Record<string, string> {
   const hints: Record<string, string> = {};
-  if (!text?.trim()) return hints;
-
-  const sia = text.match(/SIA[:\s#-]*([A-Z0-9]{6,})/i);
-  if (sia) hints.siaNumber = sia[1];
-
-  const dbs = text.match(/DBS[:\s#-]*([A-Z0-9-]{6,})/i);
-  if (dbs) hints.dbsNumber = dbs[1];
-
-  const licence = text.match(
-    /(?:driving\s+licence|license)[:\s#-]*([A-Z0-9]{8,})/i,
-  );
-  if (licence) hints.licenceNumber = licence[1];
-
-  const years = text.match(/(\d{1,2})\+?\s*years?/i);
-  if (years) hints.yearsExperience = years[1];
-
-  const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  if (email) hints.emailInDoc = email[0];
-
+  for (const f of parseTextFields(text ?? "")) {
+    hints[f.key] = f.value;
+  }
   return hints;
 }
 

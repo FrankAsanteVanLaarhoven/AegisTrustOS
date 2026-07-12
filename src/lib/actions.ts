@@ -75,12 +75,16 @@ export async function addCredential(formData: FormData) {
   if (!title) throw new Error("Title required");
 
   const freeText = `${title} ${issuer} ${number} ${notes}`;
-  const assessment = buildAssessment({
-    checklist: [],
-    credentials: [],
-    claimedCategories: [],
-    freeText,
+  const { runExtraction, pickNumberFromExtraction } = await import(
+    "@/lib/services/ocr-service"
+  );
+  const extraction = await runExtraction({
+    text: freeText,
+    hintType: type,
+    fileName: title,
   });
+  const extractedNumber =
+    number || pickNumberFromExtraction(extraction.payload) || null;
 
   const cred = await db.credential.create({
     data: {
@@ -88,12 +92,10 @@ export async function addCredential(formData: FormData) {
       type,
       title,
       issuer: issuer || null,
-      number: number || null,
+      number: extractedNumber,
       notes: notes || null,
-      verificationStatus: Object.keys(assessment.extractedHints).length
-        ? "PENDING"
-        : "PENDING",
-      extractedJson: JSON.stringify(assessment.extractedHints),
+      verificationStatus: extraction.suggestedStatus,
+      extractedJson: JSON.stringify(extraction.payload),
     },
   });
 
@@ -102,7 +104,13 @@ export async function addCredential(formData: FormData) {
     entityType: "Credential",
     entityId: cred.id,
     action: "CREDENTIAL_ADD",
-    payload: { type, title },
+    payload: {
+      type,
+      title,
+      ocrEngine: extraction.payload.engine,
+      confidence: extraction.payload.overallConfidence,
+      manualReview: extraction.payload.requiresManualReview,
+    },
   });
 
   revalidatePath("/provider/wallet");

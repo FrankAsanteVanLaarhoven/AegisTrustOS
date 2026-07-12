@@ -12,6 +12,7 @@ import {
   evaluateChecklist,
   type ChecklistItem,
 } from "@/lib/compliance/matrix";
+import { ExtractedFields } from "@/components/trust/ExtractedFields";
 
 export const dynamic = "force-dynamic";
 
@@ -79,24 +80,27 @@ export default async function OpsProviderPage({
       <Card>
         <CardHeader title="Credential wallet" />
         <CardBody>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-white/[0.06]">
             {provider.credentials.map((c) => (
-              <li key={c.id} className="flex justify-between py-2 text-sm">
-                <span>
-                  <strong>{c.type}</strong> — {c.title}
-                  {c.number ? ` (${c.number})` : ""}
-                </span>
-                <Badge
-                  tone={
-                    c.verificationStatus === "VERIFIED"
-                      ? "success"
-                      : c.verificationStatus === "AI_FLAGGED"
-                        ? "warn"
-                        : "muted"
-                  }
-                >
-                  {c.verificationStatus}
-                </Badge>
+              <li key={c.id} className="py-3 text-sm">
+                <div className="flex justify-between gap-2">
+                  <span className="text-zinc-200">
+                    <strong>{c.type}</strong> — {c.title}
+                    {c.number ? ` (${c.number})` : ""}
+                  </span>
+                  <Badge
+                    tone={
+                      c.verificationStatus === "VERIFIED"
+                        ? "success"
+                        : c.verificationStatus === "AI_FLAGGED"
+                          ? "warn"
+                          : "muted"
+                    }
+                  >
+                    {c.verificationStatus}
+                  </Badge>
+                </div>
+                <ExtractedFields extractedJson={c.extractedJson} compact />
               </li>
             ))}
           </ul>

@@ -4,11 +4,13 @@ import type { EventBus } from "@/lib/ports/events";
 import type { ObjectStorage } from "@/lib/ports/storage";
 import type { Notifier } from "@/lib/ports/notify";
 import type { PaymentsPort } from "@/lib/ports/payments";
+import type { OcrPort } from "@/lib/ports/ocr";
 import { PrismaOutboxEventBus } from "@/lib/adapters/events/prisma-outbox";
 import { EncryptedLocalStorage } from "@/lib/adapters/storage/encrypted-local";
 import { createNotifier } from "@/lib/adapters/notify/console-http";
 import { StubPayments } from "@/lib/adapters/payments/stub";
 import { StripePayments } from "@/lib/adapters/payments/stripe";
+import { MockOcrAdapter } from "@/lib/adapters/ocr/mock";
 import { log } from "@/lib/observability/logger";
 
 export type AppContainer = {
@@ -17,6 +19,7 @@ export type AppContainer = {
   storage: ObjectStorage;
   notify: Notifier;
   payments: PaymentsPort;
+  ocr: OcrPort;
   jurisdictionDefault: string;
 };
 
@@ -87,6 +90,7 @@ export function getContainer(): AppContainer {
     storage: buildStorage(),
     notify: createNotifier(),
     payments: buildPayments(),
+    ocr: new MockOcrAdapter(), // OCR_BACKEND=textract later
     jurisdictionDefault: env.JURISDICTION_DEFAULT,
   };
   return container;

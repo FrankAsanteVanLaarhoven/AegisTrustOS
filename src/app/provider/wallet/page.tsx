@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
+import { ExtractedFields } from "@/components/trust/ExtractedFields";
 
 export const dynamic = "force-dynamic";
 
@@ -121,29 +122,36 @@ export default async function WalletPage() {
           }
         />
         <CardBody>
-          <ul className="divide-y divide-slate-100">
+          <ul className="divide-y divide-white/[0.06]">
             {profile.credentials.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                <div>
-                  <p className="font-medium text-zinc-100">
-                    {c.title}{" "}
-                    <span className="text-xs font-normal text-zinc-500">{c.type}</span>
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    {c.issuer ?? "—"} · added {formatDate(c.createdAt)}
-                  </p>
+              <li key={c.id} className="py-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-medium text-zinc-100">
+                      {c.title}{" "}
+                      <span className="text-xs font-normal text-zinc-500">
+                        {c.type}
+                      </span>
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      {c.issuer ?? "—"}
+                      {c.number ? ` · ${c.number}` : ""} · added{" "}
+                      {formatDate(c.createdAt)}
+                    </p>
+                  </div>
+                  <Badge
+                    tone={
+                      c.verificationStatus === "VERIFIED"
+                        ? "success"
+                        : c.verificationStatus === "AI_FLAGGED"
+                          ? "warn"
+                          : "muted"
+                    }
+                  >
+                    {c.verificationStatus}
+                  </Badge>
                 </div>
-                <Badge
-                  tone={
-                    c.verificationStatus === "VERIFIED"
-                      ? "success"
-                      : c.verificationStatus === "AI_FLAGGED"
-                        ? "warn"
-                        : "muted"
-                  }
-                >
-                  {c.verificationStatus}
-                </Badge>
+                <ExtractedFields extractedJson={c.extractedJson} compact />
               </li>
             ))}
             {!profile.credentials.length ? (

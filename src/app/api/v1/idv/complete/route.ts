@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { apiOk, apiErr } from "@/lib/api/envelope";
 import { getContainer } from "@/lib/container";
+import { runExtraction, pickNumberFromExtraction } from "@/lib/services/ocr-service";
 import { nanoid } from "nanoid";
 
 export const dynamic = "force-dynamic";
@@ -38,21 +39,33 @@ export async function POST(req: Request) {
     return Buffer.from(base64, "base64");
   }
 
+  const idBuf = dataUrlToBuffer(body.idImageDataUrl);
+  const selfieBuf = dataUrlToBuffer(body.selfieDataUrl);
+
   const { storage, idv } = getContainer();
   const idKey = `idv/${profile.id}/id-${nanoid(8)}.jpg`;
   const selfieKey = `idv/${profile.id}/selfie-${nanoid(8)}.jpg`;
 
   const idStored = await storage.put({
     key: idKey,
-    data: dataUrlToBuffer(body.idImageDataUrl),
+    data: idBuf,
     contentType: "image/jpeg",
     encrypt: true,
   });
   const selfieStored = await storage.put({
     key: selfieKey,
-    data: dataUrlToBuffer(body.selfieDataUrl),
+    data: selfieBuf,
     contentType: "image/jpeg",
     encrypt: true,
+  });
+
+  // OCR + deterministic validation on ID image
+  const extraction = await runExtraction({
+    image: idBuf,
+    contentType: "image/jpeg",
+    hintType: "ID",
+    fileName: "camera-id.jpg",
+    text: profile.user.name,
   });
 
   const started = await idv.startCheck({
@@ -75,22 +88,29 @@ export async function POST(req: Request) {
         selfieObjectKey: selfieStored.key,
         encrypted: true,
         clientLiveness: body.livenessScore,
+        ocr: extraction.payload,
       }),
     },
   });
+
+  const number = pickNumberFromExtraction(extraction.payload) ?? null;
 
   await db.credential.create({
     data: {
       providerId: profile.id,
       type: "ID",
       title: "Camera-captured photo ID",
-      verificationStatus: result.status === "PASSED" ? "PENDING" : "AI_FLAGGED",
-      notes: "Captured via on-site identity flow (encrypted store)",
+      number,
+      verificationStatus: extraction.suggestedStatus,
+      notes: extraction.payload.requiresManualReview
+        ? "OCR flagged for manual review"
+        : "Captured via on-site identity flow (encrypted store)",
       filePath: idStored.key,
       extractedJson: JSON.stringify({
         source: "camera_idv",
         checkId: check.id,
         storageKey: idStored.key,
+        ocr: extraction.payload,
       }),
     },
   });
@@ -104,6 +124,8 @@ export async function POST(req: Request) {
       status: result.status,
       liveness: body.livenessScore,
       encrypted: true,
+      ocrConfidence: extraction.payload.overallConfidence,
+      ocrManualReview: extraction.payload.requiresManualReview,
     },
     eventType: "provider.idv_completed",
   });
@@ -113,5 +135,12 @@ export async function POST(req: Request) {
     status: result.status,
     livenessScore: body.livenessScore ?? result.livenessScore,
     encrypted: true,
+    ocr: {
+      documentKind: extraction.payload.documentKind,
+      overallConfidence: extraction.payload.overallConfidence,
+      requiresManualReview: extraction.payload.requiresManualReview,
+      fields: extraction.payload.fields,
+      reasons: extraction.payload.reasons,
+    },
   });
 }
