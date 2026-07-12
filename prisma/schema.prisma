@@ -1,0 +1,594 @@
+// Aegis Trust OS — domain model
+// Provider: SQLite for zero-deps local demo; switch to postgresql for production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  PROVIDER
+  OPS
+  ADMIN
+}
+
+enum ProviderStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  VERIFIED
+  SUSPENDED
+}
+
+enum ClientRiskTier {
+  STANDARD
+  ELEVATED
+  VIP
+}
+
+enum CategoryPhase {
+  CONCIERGE
+  SECURITY
+  CARE
+  CORE
+}
+
+enum RiskLevel {
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum CategoryMode {
+  ACTIVE
+  WAITLIST
+  DISABLED
+}
+
+enum ProviderCategoryStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  VERIFIED
+  REJECTED
+  WAITLIST
+  SUSPENDED
+}
+
+enum TrustTier {
+  T1
+  T2
+  T3
+}
+
+enum CredentialType {
+  ID
+  RTW
+  PROOF_OF_ADDRESS
+  LICENCE
+  CERTIFICATE
+  REFERENCE
+  DBS
+  SIA
+  INSURANCE
+  SAFEGUARDING
+  MEDICATION
+  OTHER
+}
+
+enum VerificationStatus {
+  PENDING
+  AI_FLAGGED
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum TrustDecision {
+  CLEAR
+  REQUEST_MORE
+  REJECT
+  WAITLIST
+}
+
+enum RequestStatus {
+  DRAFT
+  OPEN
+  MATCHED
+  CONTRACTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MatchStatus {
+  SUGGESTED
+  SHORTLISTED
+  OFFERED
+  ACCEPTED
+  DECLINED
+}
+
+enum ContractType {
+  NDA
+  SERVICE
+}
+
+enum ContractStatus {
+  DRAFT
+  SENT
+  SIGNED
+  VOID
+}
+
+enum BookingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ServiceLogKind {
+  CHECK_IN
+  NOTE
+  INCIDENT
+  CHECK_OUT
+}
+
+enum IdvVendor {
+  MOCK
+  TRULIOO
+  SOCURE
+  OTHER
+}
+
+enum IdvStatus {
+  PENDING
+  PASSED
+  FAILED
+  EXPIRED
+}
+
+enum IncidentSeverity {
+  LOW
+  MED
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  ESCALATED
+}
+
+enum PartnerType {
+  AGENCY
+  CORPORATE
+  FAMILY_OFFICE
+}
+
+enum PartnerStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+enum PartnerMemberRole {
+  OWNER
+  REVIEWER
+  REQUESTER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         UserRole
+  name         String
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  providerProfile   ProviderProfile?
+  clientProfile     ClientProfile?
+  trustReviews      TrustReview[]      @relation("ReviewerReviews")
+  auditEvents       AuditEvent[]
+  serviceLogs       ServiceLog[]
+  reviews           Review[]
+  partnerMemberships PartnerMembership[]
+  incidentsOpened   Incident[]         @relation("IncidentOpener")
+}
+
+model ProviderProfile {
+  id              String         @id @default(cuid())
+  userId          String         @unique
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio             String?
+  city            String         @default("London")
+  area            String?
+  lat             Float?
+  lng             Float?
+  serviceRadiusKm Int            @default(25)
+  availabilityJson String        @default("{}")
+  skillsJson      String         @default("[]")
+  overallStatus   ProviderStatus @default(DRAFT)
+  riskScore       Int            @default(50)
+  lastReviewedAt  DateTime?
+  reviewedById    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  categories      ProviderCategory[]
+  credentials     Credential[]
+  trustReviews    TrustReview[]
+  matches         Match[]
+  contracts       Contract[]       @relation("ProviderContracts")
+  bookings        Booking[]        @relation("ProviderBookings")
+  idvChecks       IdvCheck[]
+  incidents       Incident[]       @relation("ProviderIncidents")
+  passport        AegisPassport?
+  interviews      VerificationInterview[]
+}
+
+model ClientProfile {
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organisation   String?
+  clientRiskTier ClientRiskTier @default(STANDARD)
+  city           String         @default("London")
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  requests  ServiceRequest[]
+  contracts Contract[]       @relation("ClientContracts")
+  bookings  Booking[]        @relation("ClientBookings")
+  incidents Incident[]       @relation("ClientIncidents")
+}
+
+model Category {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  name        String
+  phase       CategoryPhase
+  riskLevel   RiskLevel
+  mode        CategoryMode  @default(ACTIVE)
+  description String
+  checklistJson String      @default("[]")
+  sortOrder   Int           @default(0)
+  groupKey    String        @default("executive")
+  groupLabel  String        @default("Executive & lifestyle")
+  groupSort   Int           @default(10)
+  createdAt   DateTime      @default(now())
+
+  providerCategories ProviderCategory[]
+  requests           ServiceRequest[]
+
+  @@index([groupKey, groupSort, sortOrder])
+}
+
+model ProviderCategory {
+  id           String                 @id @default(cuid())
+  providerId   String
+  provider     ProviderProfile        @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  categoryId   String
+  category     Category               @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  status       ProviderCategoryStatus @default(DRAFT)
+  trustTier   TrustTier              @default(T1)
+  submittedAt  DateTime?
+  verifiedAt   DateTime?
+  expiresAt    DateTime?
+  notes        String?
+  aiSignalsJson String                @default("{}")
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+
+  @@unique([providerId, categoryId])
+}
+
+model Credential {
+  id                 String             @id @default(cuid())
+  providerId         String
+  provider           ProviderProfile    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  type               CredentialType
+  title              String
+  issuer             String?
+  number             String?
+  issuedAt           DateTime?
+  expiresAt          DateTime?
+  filePath           String?
+  verificationStatus VerificationStatus @default(PENDING)
+  extractedJson      String             @default("{}")
+  notes              String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+
+model TrustReview {
+  id                    String        @id @default(cuid())
+  providerId            String
+  provider              ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  reviewerId            String
+  reviewer              User          @relation("ReviewerReviews", fields: [reviewerId], references: [id])
+  decision              TrustDecision
+  rationale             String
+  checklistSnapshotJson String        @default("{}")
+  aiSignalsJson         String        @default("{}")
+  categorySlug          String?
+  createdAt             DateTime      @default(now())
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  entityType String
+  entityId   String
+  action     String
+  payloadJson String  @default("{}")
+  ip         String?
+  createdAt  DateTime @default(now())
+}
+
+model ServiceRequest {
+  id               String        @id @default(cuid())
+  clientId         String
+  client           ClientProfile @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  categoryId       String
+  category         Category      @relation(fields: [categoryId], references: [id])
+  /// Forward-compat multi-tenant: partner org scope (nullable = direct platform)
+  tenantId         String?
+  jurisdiction     String        @default("UK")
+  title            String
+  brief            String
+  location         String        @default("London")
+  area             String?
+  startAt          DateTime
+  endAt            DateTime?
+  status           RequestStatus @default(DRAFT)
+  discretionLevel  String        @default("STANDARD")
+  budgetBand       String?
+  minTrustTier     TrustTier     @default(T1)
+  requirementsJson String        @default("{}")
+  skillsJson       String        @default("[]")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  matches   Match[]
+  contracts Contract[]
+  bookings  Booking[]
+
+  @@index([tenantId])
+  @@index([jurisdiction])
+}
+
+model Match {
+  id         String        @id @default(cuid())
+  requestId  String
+  request    ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  providerId String
+  provider   ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  score      Float
+  reasonsJson String       @default("[]")
+  status     MatchStatus   @default(SUGGESTED)
+  createdAt  DateTime      @default(now())
+
+  @@unique([requestId, providerId])
+}
+
+model Contract {
+  id               String         @id @default(cuid())
+  requestId        String
+  request          ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  providerId       String
+  provider         ProviderProfile @relation("ProviderContracts", fields: [providerId], references: [id])
+  clientId         String
+  client           ClientProfile  @relation("ClientContracts", fields: [clientId], references: [id])
+  type             ContractType
+  templateKey      String
+  bodyMarkdown     String
+  status           ContractStatus @default(DRAFT)
+  signedAtClient   DateTime?
+  signedAtProvider DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  bookings Booking[]
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  requestId      String
+  request        ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  contractId     String?
+  contract       Contract?     @relation(fields: [contractId], references: [id])
+  providerId     String
+  provider       ProviderProfile @relation("ProviderBookings", fields: [providerId], references: [id])
+  clientId       String
+  client         ClientProfile @relation("ClientBookings", fields: [clientId], references: [id])
+  /// Forward-compat multi-tenant scope
+  tenantId       String?
+  scheduledStart DateTime
+  scheduledEnd   DateTime?
+  status         BookingStatus @default(SCHEDULED)
+  location       String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  logs      ServiceLog[]
+  review    Review?
+  incidents Incident[]
+
+  @@index([tenantId])
+}
+
+model ServiceLog {
+  id          String         @id @default(cuid())
+  bookingId   String
+  booking     Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  kind        ServiceLogKind
+  body        String
+  evidenceJson String        @default("{}")
+  createdById String
+  createdBy   User           @relation(fields: [createdById], references: [id])
+  createdAt   DateTime       @default(now())
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  bookingId  String   @unique
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  rating     Int
+  body       String?
+  visibility String   @default("PUBLIC")
+  createdById String
+  createdBy  User     @relation(fields: [createdById], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model IdvCheck {
+  id                String          @id @default(cuid())
+  providerProfileId String
+  provider          ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
+  vendor            IdvVendor       @default(MOCK)
+  externalRef       String?
+  status            IdvStatus       @default(PENDING)
+  livenessScore     Float?
+  rawResultJson     String          @default("{}")
+  completedAt       DateTime?
+  createdAt         DateTime        @default(now())
+}
+
+model Incident {
+  id          String           @id @default(cuid())
+  bookingId   String?
+  booking     Booking?         @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  providerId  String?
+  provider    ProviderProfile? @relation("ProviderIncidents", fields: [providerId], references: [id])
+  clientId    String?
+  client      ClientProfile?   @relation("ClientIncidents", fields: [clientId], references: [id])
+  severity    IncidentSeverity @default(LOW)
+  status      IncidentStatus   @default(OPEN)
+  summary     String
+  resolution  String?
+  openedById  String?
+  openedBy    User?            @relation("IncidentOpener", fields: [openedById], references: [id])
+  openedAt    DateTime         @default(now())
+  closedAt    DateTime?
+}
+
+model PartnerOrg {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  type         PartnerType
+  status       PartnerStatus @default(PENDING)
+  brandingJson String        @default("{}")
+  contactEmail String
+  createdAt    DateTime      @default(now())
+
+  memberships PartnerMembership[]
+}
+
+model PartnerMembership {
+  id           String            @id @default(cuid())
+  partnerOrgId String
+  partnerOrg   PartnerOrg        @relation(fields: [partnerOrgId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         PartnerMemberRole @default(REQUESTER)
+
+  @@unique([partnerOrgId, userId])
+}
+
+model TrustPlaybookStep {
+  id             String @id @default(cuid())
+  code           String @unique
+  title          String
+  verticalPhase  String
+  bodyMarkdown   String
+  sortOrder      Int    @default(0)
+}
+
+/// Durable domain event outbox — future webhooks, SIEM, search indexers
+model DomainEventOutbox {
+  id          String    @id @default(cuid())
+  type        String
+  entityType  String
+  entityId    String
+  actorId     String?
+  tenantId    String?
+  payloadJson String    @default("{}")
+  occurredAt  DateTime  @default(now())
+  createdAt   DateTime  @default(now())
+  publishedAt DateTime?
+
+  @@index([publishedAt, createdAt])
+  @@index([type])
+  @@index([tenantId])
+}
+
+enum PassportStatus {
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+/// Platform-issued trust badge (not a government identity document)
+model AegisPassport {
+  id                     String         @id @default(cuid())
+  providerId             String         @unique
+  provider               ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  passportNumber         String         @unique
+  publicSlug             String         @unique
+  status                 PassportStatus @default(ACTIVE)
+  tier                   TrustTier     @default(T1)
+  verifiedCategoriesJson String         @default("[]")
+  issuedAt               DateTime       @default(now())
+  expiresAt              DateTime
+  revokedAt              DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  LIVE
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+enum InterviewOutcome {
+  PENDING
+  PROCEED_CLEAR
+  REQUEST_MORE
+  REJECT_RECOMMEND
+}
+
+model VerificationInterview {
+  id           String           @id @default(cuid())
+  providerId   String
+  provider     ProviderProfile  @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  reviewerId   String?
+  roomCode     String           @unique
+  scheduledAt  DateTime
+  status       InterviewStatus  @default(SCHEDULED)
+  outcome      InterviewOutcome @default(PENDING)
+  notes        String?
+  consentVideo Boolean          @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([providerId, status])
+}

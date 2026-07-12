@@ -1,36 +1,107 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Aegis Trust OS
 
-## Getting Started
+**Trust infrastructure for high-stakes human services.**  
+*AI assists. Humans adjudicate.*
 
-First, run the development server:
+**Aegis** is a hybrid agency + vertical trust-tech platform for premium concierge (live), security (scaffold), and care (scaffold). We sit on IDV rails (Trulioo/Socure-class later); we own role clearance, UK compliance evidence, and orchestration — we do not try to out-build horizontal IDV vendors.
+
+## Quick start
 
 ```bash
+cd workspace/aegis
+npm install
+cp .env.example .env   # if needed
+npx prisma db push
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3010](http://localhost:3010).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Optional Postgres
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+docker compose up -d
+# set DATABASE_URL=postgresql://aegis:aegis@localhost:5433/aegis
+# change prisma datasource provider to postgresql, then db push + seed
+```
 
-## Learn More
+Default local DB is **SQLite** (`file:./dev.db`) so the demo runs without Docker.
 
-To learn more about Next.js, take a look at the following resources:
+## Demo accounts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Password for all: **`aegis-demo`**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Email | Role |
+|---|---|
+| ops@aegis.demo | Trust & Safety ops |
+| admin@aegis.demo | Admin |
+| client@aegis.demo | VIP client (London) |
+| ea@aegis.demo | EA client |
+| pa@aegis.demo | Verified PA |
+| driver@aegis.demo | Verified chauffeur |
+| stylist@aegis.demo | In review |
+| security@aegis.demo | Security waitlist |
+| agency@aegis.demo | Partner org owner |
 
-## Deploy on Vercel
+## 10-minute walkthrough
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Sign in as `stylist@aegis.demo` → wallet / categories (in review)  
+2. Sign in as `ops@aegis.demo` → review queue → open stylist → CLEAR with rationale  
+3. Sign in as `client@aegis.demo` → new request (chauffeur/PA) → shortlist → Sign NDA + engage  
+4. Provider bookings → CHECK_IN / CHECK_OUT  
+5. Ops → KPIs, incidents, playbook, audit  
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `npm run dev` | Next.js on port **3010** |
+| `npm run build` | Production build |
+| `npm test` | Vitest (match, AI, KPI) |
+| `npm run db:seed` | Seed demo data |
+| `npm run db:push` | Push Prisma schema |
+
+## Product surface
+
+- **Trust engine:** credential wallet, mock IDV, compliance matrix, AI advisory, ops clearance  
+- **Concierge:** requests, explainable match, contracts, bookings, logs, reviews  
+- **T&S:** queues, playbook, incidents, live KPIs, audit  
+- **Scaffold:** `/verticals/security`, `/verticals/care`  
+- **Docs:** `/docs/investor`, `/docs/architecture`, `/docs/compliance`  
+
+## Disclaimer
+
+Aegis facilitates evidence collection and human review. It does **not** replace regulated agency registration, CQC registration, SIA employment law advice, or solicitor-drafted contracts. Do not market “AI verified trustworthy.”
+
+## Security posture
+
+Palantir-grade ops aesthetic + stealth controls: hardened headers, rate-limited auth, role-gated routes, masked session display, audited logins/clearances, no stack fingerprint. See [docs/SECURITY.md](./docs/SECURITY.md).
+
+## Future-proof platform
+
+| Surface | Path |
+|---|---|
+| Health | `GET /api/v1/health` |
+| Version + flags | `GET /api/v1/version` |
+| Categories | `GET /api/v1/categories` |
+| Session | `GET /api/v1/me` |
+| Outbox peek | `GET /api/v1/events/outbox` (OPS) |
+| Audit export | `npm run export:audit` |
+
+See [docs/FUTURE_PROOF.md](./docs/FUTURE_PROOF.md) and [docs/EXTENSIONS.md](./docs/EXTENSIONS.md).
+
+## Docs
+
+- [Future-proof](./docs/FUTURE_PROOF.md)
+- [Extensions](./docs/EXTENSIONS.md)
+- [Security](./docs/SECURITY.md)
+- [Brand](./docs/BRAND.md)
+- [Investor narrative](./docs/INVESTOR_NARRATIVE.md)
+- [Architecture](./docs/ARCHITECTURE.md)
+- [Hybrid IDV architecture](./docs/HYBRID_IDV_ARCHITECTURE.md)
+- [Competitive matrix](./docs/COMPETITIVE_MATRIX.md)
+- [Demand validation script](./docs/DEMAND_VALIDATION.md)
+- [Compliance matrix](./docs/COMPLIANCE_MATRIX.md)
+- [Trust & Safety playbook](./docs/TRUST_SAFETY_PLAYBOOK.md)
+- [KPI framework](./docs/KPI_FRAMEWORK.md)

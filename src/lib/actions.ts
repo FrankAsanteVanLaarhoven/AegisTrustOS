@@ -1,0 +1,742 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import type {
+  CredentialType,
+  IncidentSeverity,
+  TrustDecision,
+  TrustTier,
+} from "@prisma/client";
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { writeAudit } from "@/lib/audit";
+import { buildAssessment } from "@/lib/ai/assist";
+import { CATEGORY_SEEDS } from "@/lib/compliance/matrix";
+import { getIdvProvider } from "@/lib/idv/provider";
+import { rankMatches, LONDON_CENTER } from "@/lib/matching/engine";
+import { parseJsonArray } from "@/lib/utils";
+import { renderTemplate } from "@/lib/contracts/templates";
+
+async function requireUser(roles?: string[]) {
+  const session = await auth();
+  if (!session?.user) throw new Error("Unauthorized");
+  if (roles && !roles.includes(session.user.role)) throw new Error("Forbidden");
+  return session.user;
+}
+
+export async function updateProviderProfile(formData: FormData) {
+  const user = await requireUser(["PROVIDER"]);
+  const profile = await db.providerProfile.findUnique({ where: { userId: user.id } });
+  if (!profile) throw new Error("No provider profile");
+
+  const bio = String(formData.get("bio") ?? "");
+  const city = String(formData.get("city") ?? "London");
+  const area = String(formData.get("area") ?? "");
+  const skills = String(formData.get("skills") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  await db.providerProfile.update({
+    where: { id: profile.id },
+    data: {
+      bio,
+      city,
+      area: area || null,
+      skillsJson: JSON.stringify(skills),
+      lat: LONDON_CENTER.lat + (Math.random() - 0.5) * 0.08,
+      lng: LONDON_CENTER.lng + (Math.random() - 0.5) * 0.12,
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "ProviderProfile",
+    entityId: profile.id,
+    action: "PROFILE_UPDATE",
+  });
+
+  revalidatePath("/provider");
+  redirect("/provider");
+}
+
+export async function addCredential(formData: FormData) {
+  const user = await requireUser(["PROVIDER"]);
+  const profile = await db.providerProfile.findUnique({ where: { userId: user.id } });
+  if (!profile) throw new Error("No provider profile");
+
+  const type = String(formData.get("type") ?? "OTHER") as CredentialType;
+  const title = String(formData.get("title") ?? "").trim();
+  const issuer = String(formData.get("issuer") ?? "").trim();
+  const number = String(formData.get("number") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  if (!title) throw new Error("Title required");
+
+  const freeText = `${title} ${issuer} ${number} ${notes}`;
+  const assessment = buildAssessment({
+    checklist: [],
+    credentials: [],
+    claimedCategories: [],
+    freeText,
+  });
+
+  const cred = await db.credential.create({
+    data: {
+      providerId: profile.id,
+      type,
+      title,
+      issuer: issuer || null,
+      number: number || null,
+      notes: notes || null,
+      verificationStatus: Object.keys(assessment.extractedHints).length
+        ? "PENDING"
+        : "PENDING",
+      extractedJson: JSON.stringify(assessment.extractedHints),
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "Credential",
+    entityId: cred.id,
+    action: "CREDENTIAL_ADD",
+    payload: { type, title },
+  });
+
+  revalidatePath("/provider/wallet");
+  revalidatePath("/provider");
+}
+
+export async function applyToCategory(formData: FormData) {
+  const user = await requireUser(["PROVIDER"]);
+  const profile = await db.providerProfile.findUnique({
+    where: { userId: user.id },
+    include: { credentials: true, categories: { include: { category: true } } },
+  });
+  if (!profile) throw new Error("No provider profile");
+
+  const categoryId = String(formData.get("categoryId") ?? "");
+  const category = await db.category.findUnique({ where: { id: categoryId } });
+  if (!category) throw new Error("Category not found");
+
+  const seed = CATEGORY_SEEDS.find((c) => c.slug === category.slug);
+  const checklist = seed?.checklist ?? JSON.parse(category.checklistJson || "[]");
+  const claimed = [
+    ...profile.categories.map((c) => c.category.slug),
+    category.slug,
+  ];
+  const assessment = buildAssessment({
+    checklist,
+    credentials: profile.credentials,
+    claimedCategories: claimed,
+    bio: profile.bio,
+    skills: parseJsonArray(profile.skillsJson),
+    freeText: profile.bio ?? "",
+  });
+
+  const isWaitlist = category.mode === "WAITLIST";
+  const status = isWaitlist
+    ? "WAITLIST"
+    : assessment.missing.length
+      ? "SUBMITTED"
+      : "SUBMITTED";
+
+  await db.providerCategory.upsert({
+    where: {
+      providerId_categoryId: { providerId: profile.id, categoryId },
+    },
+    update: {
+      status,
+      submittedAt: new Date(),
+      aiSignalsJson: JSON.stringify(assessment),
+    },
+    create: {
+      providerId: profile.id,
+      categoryId,
+      status,
+      submittedAt: new Date(),
+      aiSignalsJson: JSON.stringify(assessment),
+    },
+  });
+
+  await db.providerProfile.update({
+    where: { id: profile.id },
+    data: {
+      overallStatus: isWaitlist ? "SUBMITTED" : "IN_REVIEW",
+      riskScore: assessment.riskScore,
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "ProviderCategory",
+    entityId: categoryId,
+    action: isWaitlist ? "CATEGORY_WAITLIST" : "CATEGORY_SUBMIT",
+    payload: { slug: category.slug, riskScore: assessment.riskScore },
+    eventType: "provider.category_submitted",
+  });
+
+  revalidatePath("/provider");
+  revalidatePath("/provider/categories");
+  revalidatePath("/ops");
+}
+
+export async function runIdvCheck() {
+  const user = await requireUser(["PROVIDER"]);
+  const profile = await db.providerProfile.findUnique({
+    where: { userId: user.id },
+    include: { user: true },
+  });
+  if (!profile) throw new Error("No provider profile");
+
+  const idv = getIdvProvider();
+  const session = await idv.startCheck({
+    fullName: profile.user.name,
+    email: profile.user.email,
+  });
+  const result = await idv.getResult(session.sessionId);
+
+  await db.idvCheck.create({
+    data: {
+      providerProfileId: profile.id,
+      vendor: "MOCK",
+      externalRef: result.sessionId,
+      status: result.status,
+      livenessScore: result.livenessScore,
+      rawResultJson: JSON.stringify(result.raw),
+      completedAt: new Date(),
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "IdvCheck",
+    entityId: profile.id,
+    action: "IDV_RUN",
+    payload: { status: result.status, livenessScore: result.livenessScore },
+  });
+
+  revalidatePath("/provider");
+  revalidatePath("/provider/wallet");
+}
+
+export async function trustDecision(formData: FormData) {
+  const user = await requireUser(["OPS", "ADMIN"]);
+  const providerId = String(formData.get("providerId") ?? "");
+  const decision = String(formData.get("decision") ?? "") as TrustDecision;
+  const rationale = String(formData.get("rationale") ?? "").trim();
+  const categorySlug = String(formData.get("categorySlug") ?? "") || null;
+  const trustTier = (String(formData.get("trustTier") ?? "T1") || "T1") as TrustTier;
+
+  if (!providerId || !rationale || !decision) throw new Error("Missing fields");
+
+  const { recordTrustDecision } = await import("@/lib/services/trust-service");
+  await recordTrustDecision({
+    providerId,
+    reviewerId: user.id,
+    decision,
+    rationale,
+    categorySlug,
+    trustTier,
+  });
+
+  revalidatePath("/ops");
+  revalidatePath(`/ops/providers/${providerId}`);
+  revalidatePath("/ops/kpis");
+  redirect(`/ops/providers/${providerId}`);
+}
+
+export async function createServiceRequest(formData: FormData) {
+  const user = await requireUser(["CLIENT"]);
+  const client = await db.clientProfile.findUnique({ where: { userId: user.id } });
+  if (!client) throw new Error("No client profile");
+
+  const categoryId = String(formData.get("categoryId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const brief = String(formData.get("brief") ?? "").trim();
+  const location = String(formData.get("location") ?? "London").trim() || "London";
+  const area = String(formData.get("area") ?? "").trim();
+  const startAt = new Date(String(formData.get("startAt") ?? ""));
+  const minTrustTier = (String(formData.get("minTrustTier") ?? "T1") ||
+    "T1") as TrustTier;
+  const discretionLevel = String(formData.get("discretionLevel") ?? "STANDARD");
+  const skills = String(formData.get("skills") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const category = await db.category.findUnique({ where: { id: categoryId } });
+  if (!category || category.mode !== "ACTIVE") {
+    throw new Error("Category not bookable yet");
+  }
+  if (!title || !brief || Number.isNaN(startAt.getTime())) {
+    throw new Error("Invalid request");
+  }
+
+  const { getEnv } = await import("@/config/env");
+  const { resolveDefaultTenantId } = await import("@/lib/tenancy");
+  const tenantId = await resolveDefaultTenantId(user.id);
+
+  const req = await db.serviceRequest.create({
+    data: {
+      clientId: client.id,
+      categoryId,
+      title,
+      brief,
+      location,
+      area: area || null,
+      startAt,
+      status: "OPEN",
+      minTrustTier,
+      discretionLevel,
+      skillsJson: JSON.stringify(skills),
+      budgetBand: String(formData.get("budgetBand") ?? "PREMIUM") || "PREMIUM",
+      jurisdiction: getEnv().JURISDICTION_DEFAULT,
+      tenantId,
+    },
+  });
+
+  // Auto-match
+  const providers = await db.providerProfile.findMany({
+    where: { overallStatus: { not: "SUSPENDED" } },
+    include: {
+      user: true,
+      categories: { include: { category: true } },
+      bookings: {
+        where: { clientId: client.id, status: "COMPLETED" },
+        select: { id: true },
+      },
+    },
+  });
+
+  const candidates = providers.flatMap((p) =>
+    p.categories
+      .filter((c) => c.categoryId === categoryId)
+      .map((c) => ({
+        providerId: p.id,
+        name: p.user.name,
+        city: p.city,
+        area: p.area,
+        lat: p.lat,
+        lng: p.lng,
+        serviceRadiusKm: p.serviceRadiusKm,
+        skills: parseJsonArray(p.skillsJson),
+        riskScore: p.riskScore,
+        trustTier: c.trustTier,
+        categoryStatus: c.status,
+        categorySlug: c.category.slug,
+        priorBookingsWithClient: p.bookings.length,
+        suspended: p.overallStatus === "SUSPENDED",
+      })),
+  );
+
+  const ranked = rankMatches(
+    {
+      categorySlug: category.slug,
+      location,
+      area,
+      lat: LONDON_CENTER.lat,
+      lng: LONDON_CENTER.lng,
+      minTrustTier,
+      skills,
+      clientId: client.id,
+    },
+    candidates,
+  );
+
+  for (const m of ranked) {
+    await db.match.create({
+      data: {
+        requestId: req.id,
+        providerId: m.providerId,
+        score: m.score,
+        reasonsJson: JSON.stringify(m.reasons),
+        status: "SUGGESTED",
+      },
+    });
+  }
+
+  if (ranked.length) {
+    await db.serviceRequest.update({
+      where: { id: req.id },
+      data: { status: "MATCHED" },
+    });
+  }
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "ServiceRequest",
+    entityId: req.id,
+    action: "REQUEST_CREATE",
+    payload: { matches: ranked.length },
+    eventType: ranked.length ? "request.matched" : "request.created",
+  });
+
+  revalidatePath("/client");
+  redirect(`/client/requests/${req.id}`);
+}
+
+export async function shortlistMatch(formData: FormData) {
+  const user = await requireUser(["CLIENT"]);
+  const matchId = String(formData.get("matchId") ?? "");
+  const match = await db.match.findUnique({
+    where: { id: matchId },
+    include: { request: { include: { client: true } } },
+  });
+  if (!match || match.request.client.userId !== user.id) throw new Error("Forbidden");
+
+  await db.match.update({
+    where: { id: matchId },
+    data: { status: "SHORTLISTED" },
+  });
+
+  revalidatePath(`/client/requests/${match.requestId}`);
+}
+
+export async function createAndSignContracts(formData: FormData) {
+  const user = await requireUser(["CLIENT"]);
+  const requestId = String(formData.get("requestId") ?? "");
+  const providerId = String(formData.get("providerId") ?? "");
+
+  const req = await db.serviceRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      client: { include: { user: true } },
+      category: true,
+    },
+  });
+  if (!req || req.client.userId !== user.id) throw new Error("Forbidden");
+
+  const provider = await db.providerProfile.findUnique({
+    where: { id: providerId },
+    include: { user: true },
+  });
+  if (!provider) throw new Error("Provider not found");
+
+  const vars = {
+    clientName: req.client.user.name,
+    providerName: provider.user.name,
+    title: req.title,
+    location: req.location,
+  };
+
+  const now = new Date();
+  for (const type of ["NDA", "SERVICE"] as const) {
+    await db.contract.create({
+      data: {
+        requestId,
+        providerId,
+        clientId: req.clientId,
+        type,
+        templateKey: type,
+        bodyMarkdown: renderTemplate(type, vars),
+        status: "SIGNED",
+        signedAtClient: now,
+        signedAtProvider: now,
+      },
+    });
+  }
+
+  await db.match.updateMany({
+    where: { requestId, providerId },
+    data: { status: "ACCEPTED" },
+  });
+
+  await db.serviceRequest.update({
+    where: { id: requestId },
+    data: { status: "CONTRACTED" },
+  });
+
+  const serviceContract = await db.contract.findFirst({
+    where: { requestId, providerId, type: "SERVICE" },
+  });
+
+  const booking = await db.booking.create({
+    data: {
+      requestId,
+      contractId: serviceContract?.id,
+      providerId,
+      clientId: req.clientId,
+      scheduledStart: req.startAt,
+      scheduledEnd: req.endAt,
+      status: "SCHEDULED",
+      location: [req.area, req.location].filter(Boolean).join(", "),
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "Booking",
+    entityId: booking.id,
+    action: "BOOKING_CREATE",
+    payload: { requestId, providerId },
+    eventType: "booking.created",
+  });
+
+  revalidatePath("/client");
+  revalidatePath(`/client/requests/${requestId}`);
+  revalidatePath("/provider");
+  redirect(`/client/bookings`);
+}
+
+export async function addServiceLog(formData: FormData) {
+  const user = await requireUser(["PROVIDER", "OPS", "ADMIN", "CLIENT"]);
+  const bookingId = String(formData.get("bookingId") ?? "");
+  const kind = String(formData.get("kind") ?? "NOTE") as
+    | "CHECK_IN"
+    | "NOTE"
+    | "INCIDENT"
+    | "CHECK_OUT";
+  const body = String(formData.get("body") ?? "").trim();
+  if (!body) throw new Error("Body required");
+
+  await db.serviceLog.create({
+    data: {
+      bookingId,
+      kind,
+      body,
+      createdById: user.id,
+    },
+  });
+
+  if (kind === "CHECK_IN") {
+    await db.booking.update({
+      where: { id: bookingId },
+      data: { status: "IN_PROGRESS" },
+    });
+  }
+  if (kind === "CHECK_OUT") {
+    await db.booking.update({
+      where: { id: bookingId },
+      data: { status: "COMPLETED" },
+    });
+    const booking = await db.booking.findUnique({ where: { id: bookingId } });
+    if (booking) {
+      await db.serviceRequest.update({
+        where: { id: booking.requestId },
+        data: { status: "COMPLETED" },
+      });
+    }
+  }
+
+  revalidatePath("/provider/bookings");
+  revalidatePath("/client/bookings");
+}
+
+export async function leaveReview(formData: FormData) {
+  const user = await requireUser(["CLIENT"]);
+  const bookingId = String(formData.get("bookingId") ?? "");
+  const rating = Number(formData.get("rating") ?? 5);
+  const body = String(formData.get("body") ?? "").trim();
+
+  const booking = await db.booking.findUnique({
+    where: { id: bookingId },
+    include: { client: true },
+  });
+  if (!booking || booking.client.userId !== user.id) throw new Error("Forbidden");
+
+  await db.review.upsert({
+    where: { bookingId },
+    update: { rating, body },
+    create: {
+      bookingId,
+      rating: Math.min(5, Math.max(1, rating)),
+      body: body || null,
+      createdById: user.id,
+    },
+  });
+
+  revalidatePath("/client/bookings");
+  revalidatePath("/ops/kpis");
+}
+
+export async function openIncident(formData: FormData) {
+  const user = await requireUser(["OPS", "ADMIN", "CLIENT", "PROVIDER"]);
+  const summary = String(formData.get("summary") ?? "").trim();
+  const severity = (String(formData.get("severity") ?? "LOW") ||
+    "LOW") as IncidentSeverity;
+  const bookingId = String(formData.get("bookingId") ?? "") || null;
+  const providerId = String(formData.get("providerId") ?? "") || null;
+
+  if (!summary) throw new Error("Summary required");
+
+  const incident = await db.incident.create({
+    data: {
+      summary,
+      severity,
+      bookingId,
+      providerId,
+      openedById: user.id,
+      status: "OPEN",
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "Incident",
+    entityId: incident.id,
+    action: "INCIDENT_OPEN",
+    payload: { severity },
+    eventType: "incident.opened",
+  });
+
+  revalidatePath("/ops/incidents");
+  revalidatePath("/ops/kpis");
+}
+
+export async function resolveIncident(formData: FormData) {
+  const user = await requireUser(["OPS", "ADMIN"]);
+  const id = String(formData.get("incidentId") ?? "");
+  const resolution = String(formData.get("resolution") ?? "").trim();
+
+  await db.incident.update({
+    where: { id },
+    data: {
+      status: "RESOLVED",
+      resolution,
+      closedAt: new Date(),
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "Incident",
+    entityId: id,
+    action: "INCIDENT_RESOLVE",
+    eventType: "incident.resolved",
+  });
+
+  revalidatePath("/ops/incidents");
+  revalidatePath("/ops/kpis");
+}
+
+export async function joinSecurityWaitlist() {
+  const user = await requireUser(["PROVIDER"]);
+  const profile = await db.providerProfile.findUnique({ where: { userId: user.id } });
+  if (!profile) throw new Error("No provider profile");
+  const cat = await db.category.findUnique({ where: { slug: "concierge-security" } });
+  if (!cat) throw new Error("Category missing");
+
+  await db.providerCategory.upsert({
+    where: {
+      providerId_categoryId: { providerId: profile.id, categoryId: cat.id },
+    },
+    update: { status: "WAITLIST", submittedAt: new Date() },
+    create: {
+      providerId: profile.id,
+      categoryId: cat.id,
+      status: "WAITLIST",
+      submittedAt: new Date(),
+    },
+  });
+
+  revalidatePath("/verticals/security");
+  revalidatePath("/provider");
+}
+
+export async function joinCareWaitlist() {
+  const user = await requireUser(["PROVIDER"]);
+  const profile = await db.providerProfile.findUnique({ where: { userId: user.id } });
+  if (!profile) throw new Error("No provider profile");
+  const cat = await db.category.findUnique({ where: { slug: "home-care" } });
+  if (!cat) throw new Error("Category missing");
+
+  await db.providerCategory.upsert({
+    where: {
+      providerId_categoryId: { providerId: profile.id, categoryId: cat.id },
+    },
+    update: { status: "WAITLIST", submittedAt: new Date() },
+    create: {
+      providerId: profile.id,
+      categoryId: cat.id,
+      status: "WAITLIST",
+      submittedAt: new Date(),
+    },
+  });
+
+  revalidatePath("/verticals/care");
+  revalidatePath("/provider");
+}
+
+export async function scheduleVerificationInterview(formData: FormData) {
+  const user = await requireUser(["OPS", "ADMIN"]);
+  const providerId = String(formData.get("providerId") ?? "");
+  const when = String(formData.get("scheduledAt") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim();
+  if (!providerId || !when) throw new Error("Missing fields");
+
+  const { nanoid } = await import("nanoid");
+  const roomCode = `room-${nanoid(10)}`;
+  const interview = await db.verificationInterview.create({
+    data: {
+      providerId,
+      reviewerId: user.id,
+      roomCode,
+      scheduledAt: new Date(when),
+      status: "SCHEDULED",
+      notes: notes || null,
+      consentVideo: true,
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "VerificationInterview",
+    entityId: interview.id,
+    action: "INTERVIEW_SCHEDULED",
+    payload: { roomCode, providerId },
+  });
+
+  revalidatePath(`/ops/providers/${providerId}`);
+  redirect(`/verify/room/${roomCode}`);
+}
+
+export async function markInterviewLive(formData: FormData) {
+  const user = await requireUser(["OPS", "ADMIN", "PROVIDER"]);
+  const interviewId = String(formData.get("interviewId") ?? "");
+  await db.verificationInterview.update({
+    where: { id: interviewId },
+    data: { status: "LIVE" },
+  });
+  await writeAudit({
+    actorId: user.id,
+    entityType: "VerificationInterview",
+    entityId: interviewId,
+    action: "INTERVIEW_LIVE",
+  });
+  revalidatePath("/verify/room");
+}
+
+export async function completeInterview(formData: FormData) {
+  const user = await requireUser(["OPS", "ADMIN"]);
+  const interviewId = String(formData.get("interviewId") ?? "");
+  const outcome = String(formData.get("outcome") ?? "PROCEED_CLEAR") as
+    | "PROCEED_CLEAR"
+    | "REQUEST_MORE"
+    | "REJECT_RECOMMEND";
+  const notes = String(formData.get("notes") ?? "").trim();
+
+  const interview = await db.verificationInterview.update({
+    where: { id: interviewId },
+    data: {
+      status: "COMPLETED",
+      outcome,
+      notes: notes || undefined,
+      completedAt: new Date(),
+      reviewerId: user.id,
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "VerificationInterview",
+    entityId: interviewId,
+    action: "INTERVIEW_COMPLETED",
+    payload: { outcome },
+  });
+
+  revalidatePath(`/ops/providers/${interview.providerId}`);
+  revalidatePath(`/verify/room/${interview.roomCode}`);
+}
