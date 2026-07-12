@@ -35,6 +35,7 @@ enum CategoryPhase {
   CONCIERGE
   SECURITY
   CARE
+  ROBOTICS
   CORE
 }
 
@@ -78,6 +79,9 @@ enum CredentialType {
   INSURANCE
   SAFEGUARDING
   MEDICATION
+  AI_SAFETY
+  POLICY_CLEARANCE
+  ROBOT_CERT
   OTHER
 }
 

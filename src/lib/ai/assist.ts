@@ -87,6 +87,46 @@ export function detectInconsistencies(input: {
     }
   }
 
+  const robotSlugs = [
+    "robot-home-helper",
+    "robot-retail-assistant",
+    "robot-commercial-facility",
+    "robot-care-home-support",
+  ];
+  if (input.claimedCategories.some((s) => robotSlugs.includes(s))) {
+    if (!types.has("AI_SAFETY")) {
+      signals.push({
+        code: "MISSING_AI_SAFETY",
+        severity: "high",
+        message: "Robot service claimed without AI safety governance evidence.",
+      });
+    }
+    if (!types.has("POLICY_CLEARANCE")) {
+      signals.push({
+        code: "MISSING_POLICY_CLEARANCE",
+        severity: "high",
+        message: "Robot service claimed without site/policy clearance evidence.",
+      });
+    }
+    if (!types.has("ROBOT_CERT")) {
+      signals.push({
+        code: "MISSING_ROBOT_CERT",
+        severity: "high",
+        message: "Robot service claimed without platform safety/conformity evidence.",
+      });
+    }
+  }
+  if (
+    input.claimedCategories.includes("robot-care-home-support") &&
+    !types.has("SAFEGUARDING")
+  ) {
+    signals.push({
+      code: "ROBOT_CARE_NO_SAFEGUARDING",
+      severity: "high",
+      message: "Care-home robot deployment requires safeguarding evidence for operators.",
+    });
+  }
+
   if (input.claimedCategories.includes("chauffeur") && !types.has("LICENCE")) {
     signals.push({
       code: "MISSING_LICENCE",

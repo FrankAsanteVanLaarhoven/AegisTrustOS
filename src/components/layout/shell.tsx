@@ -57,6 +57,9 @@ export async function SiteHeader() {
               <Link href="/verticals/care" className="hover:text-[#3dd6c6] transition">
                 Care
               </Link>
+              <Link href="/verticals/robots" className="hover:text-[#3dd6c6] transition">
+                Robots
+              </Link>
               {appLinks.map((l) => (
                 <Link
                   key={l.href}

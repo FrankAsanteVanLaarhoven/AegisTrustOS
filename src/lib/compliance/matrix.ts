@@ -314,6 +314,145 @@ export const CATEGORY_SEEDS: CategorySeed[] = [
     ],
   },
 
+  // ── Robot helpers (AI safety + policy clearance) ──
+  {
+    slug: "robot-home-helper",
+    name: "Home robot helper",
+    phase: "ROBOTICS",
+    riskLevel: "HIGH",
+    mode: "ACTIVE",
+    description:
+      "Vetted robot helper deployments for private homes. Requires AI safety governance pack and site policy clearance. Operator remains human-accountable.",
+    sortOrder: 70,
+    groupKey: "robot_services",
+    groupLabel: "Robot helpers",
+    groupSort: 70,
+    checklist: [
+      ...baseIdentity,
+      {
+        type: "AI_SAFETY",
+        label: "AI safety governance pack (risk assessment, fail-safes, oversight model)",
+        required: true,
+        notes: "Documented safety case / operational design domain for the robot system",
+      },
+      {
+        type: "POLICY_CLEARANCE",
+        label: "Household deployment policy clearance",
+        required: true,
+        notes: "Client site rules, privacy, emergency stop, and data handling agreement",
+      },
+      {
+        type: "ROBOT_CERT",
+        label: "Robot platform safety / conformity evidence",
+        required: true,
+        notes: "Manufacturer CE/UKCA or equivalent safety documentation for the unit class",
+      },
+      { type: "INSURANCE", label: "Robot / public liability insurance", required: true },
+    ],
+  },
+  {
+    slug: "robot-retail-assistant",
+    name: "Retail robot assistant",
+    phase: "ROBOTICS",
+    riskLevel: "HIGH",
+    mode: "ACTIVE",
+    description:
+      "Robot assistants for retail floors (wayfinding, stock assist, customer guidance). AI safety + venue policy clearance required.",
+    sortOrder: 71,
+    groupKey: "robot_services",
+    groupLabel: "Robot helpers",
+    groupSort: 70,
+    checklist: [
+      ...baseIdentity,
+      {
+        type: "AI_SAFETY",
+        label: "AI safety governance pack",
+        required: true,
+      },
+      {
+        type: "POLICY_CLEARANCE",
+        label: "Retail venue policy clearance",
+        required: true,
+        notes: "Site induction, public interaction policy, incident escalation path",
+      },
+      {
+        type: "ROBOT_CERT",
+        label: "Robot platform safety / conformity evidence",
+        required: true,
+      },
+      { type: "INSURANCE", label: "Commercial robot / PL insurance", required: true },
+    ],
+  },
+  {
+    slug: "robot-commercial-facility",
+    name: "Commercial facility robot",
+    phase: "ROBOTICS",
+    riskLevel: "HIGH",
+    mode: "ACTIVE",
+    description:
+      "Robot helpers for offices, warehouses, and commercial facilities. Governance and facility policy clearance required.",
+    sortOrder: 72,
+    groupKey: "robot_services",
+    groupLabel: "Robot helpers",
+    groupSort: 70,
+    checklist: [
+      ...baseIdentity,
+      {
+        type: "AI_SAFETY",
+        label: "AI safety governance pack",
+        required: true,
+      },
+      {
+        type: "POLICY_CLEARANCE",
+        label: "Commercial facility policy clearance",
+        required: true,
+      },
+      {
+        type: "ROBOT_CERT",
+        label: "Robot platform safety / conformity evidence",
+        required: true,
+      },
+      { type: "INSURANCE", label: "Commercial robot / PL insurance", required: true },
+    ],
+  },
+  {
+    slug: "robot-care-home-support",
+    name: "Care home robot support",
+    phase: "ROBOTICS",
+    riskLevel: "CRITICAL",
+    mode: "WAITLIST",
+    description:
+      "Robot support in care homes (non-clinical assist). Highest bar: AI safety, safeguarding, DBS for operators, and care-home policy clearance. Not a CQC-registered care product.",
+    sortOrder: 73,
+    groupKey: "robot_services",
+    groupLabel: "Robot helpers",
+    groupSort: 70,
+    checklist: [
+      ...baseIdentity,
+      { type: "PROOF_OF_ADDRESS", label: "Proof of address", required: true },
+      { type: "DBS", label: "Enhanced DBS (operator / deployment lead)", required: true },
+      { type: "SAFEGUARDING", label: "Safeguarding training evidence", required: true },
+      {
+        type: "AI_SAFETY",
+        label: "AI safety governance pack (care setting)",
+        required: true,
+        notes: "Resident safety, human override, prohibited autonomous clinical actions",
+      },
+      {
+        type: "POLICY_CLEARANCE",
+        label: "Care home / provider policy clearance",
+        required: true,
+        notes: "Written approval from care home management / responsible person",
+      },
+      {
+        type: "ROBOT_CERT",
+        label: "Robot platform safety evidence for care environments",
+        required: true,
+      },
+      { type: "INSURANCE", label: "Care-setting robot / PL insurance", required: true },
+    ],
+  },
+
   // ── Security (waitlist) ──
   {
     slug: "concierge-security",

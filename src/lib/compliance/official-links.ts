@@ -83,6 +83,50 @@ export const OFFICIAL_LINKS: OfficialLink[] = [
     url: "https://www.skillsforcare.org.uk/",
     credentialTypes: ["SAFEGUARDING"],
   },
+  {
+    code: "AI_SAFETY_UK",
+    title: "UK AI regulation & safety context",
+    description:
+      "UK government AI regulation white paper and safety context for deployers.",
+    url: "https://www.gov.uk/government/publications/ai-regulation-a-pro-innovation-approach",
+    credentialTypes: ["AI_SAFETY"],
+  },
+  {
+    code: "AI_SAFETY_NIST",
+    title: "NIST AI Risk Management Framework",
+    description: "International AI risk management framework for safety governance packs.",
+    url: "https://www.nist.gov/itl/ai-risk-management-framework",
+    credentialTypes: ["AI_SAFETY"],
+  },
+  {
+    code: "ISO_42001",
+    title: "ISO/IEC 42001 AI management systems",
+    description: "Standard for AI management systems (governance evidence).",
+    url: "https://www.iso.org/standard/81230.html",
+    credentialTypes: ["AI_SAFETY", "POLICY_CLEARANCE"],
+  },
+  {
+    code: "PRODUCT_SAFETY_UK",
+    title: "UK product safety & CE/UKCA",
+    description: "Product safety framework relevant to robot platform conformity.",
+    url: "https://www.gov.uk/guidance/ce-marking",
+    credentialTypes: ["ROBOT_CERT"],
+  },
+  {
+    code: "HSE_ROBOTICS",
+    title: "HSE robotics & machinery safety",
+    description: "Health and Safety Executive guidance on machinery and automation risk.",
+    url: "https://www.hse.gov.uk/work-equipment-machinery/",
+    credentialTypes: ["ROBOT_CERT", "POLICY_CLEARANCE"],
+  },
+  {
+    code: "CQC_CONTEXT",
+    title: "CQC (care settings context)",
+    description:
+      "Care Quality Commission — context only. Aegis robot care-home roles are not a CQC registration product.",
+    url: "https://www.cqc.org.uk/",
+    credentialTypes: ["POLICY_CLEARANCE", "SAFEGUARDING"],
+  },
 ];
 
 export function linksForCredentialType(type: CredentialType): OfficialLink[] {

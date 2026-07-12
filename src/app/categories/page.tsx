@@ -64,6 +64,14 @@ export default async function CategoriesPage() {
                         Care vertical →
                       </Link>
                     ) : null}
+                    {c.phase === "ROBOTICS" ? (
+                      <Link
+                        href="/verticals/robots"
+                        className="text-sm font-medium text-[#3dd6c6]"
+                      >
+                        Robot helpers →
+                      </Link>
+                    ) : null}
                   </CardBody>
                 </Card>
               ))}

@@ -196,6 +196,11 @@ export default function HomePage() {
                 <strong className="text-zinc-200">Care</strong> — safeguarding
                 matrix only; no CQC claims
               </li>
+              <li>
+                <Badge tone="gold">Live / waitlist</Badge>{" "}
+                <strong className="text-zinc-200">Robot helpers</strong> — AI
+                safety governance + policy clearance (care-home waitlist)
+              </li>
             </ol>
           </div>
         </div>

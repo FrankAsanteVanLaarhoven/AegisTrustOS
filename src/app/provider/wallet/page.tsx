@@ -21,6 +21,9 @@ const TYPES = [
   "INSURANCE",
   "SAFEGUARDING",
   "MEDICATION",
+  "AI_SAFETY",
+  "POLICY_CLEARANCE",
+  "ROBOT_CERT",
   "OTHER",
 ] as const;
 

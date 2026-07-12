@@ -9,6 +9,8 @@ export type FeatureFlags = {
   securityVertical: boolean;
   /** Show care vertical waitlist & allow pre-apply */
   careVertical: boolean;
+  /** Robot helpers with AI safety + policy clearance */
+  robotVertical: boolean;
   /** Partner / white-label surfaces */
   partnerWhiteLabel: boolean;
   /** Payment rails (stub only until true) */
@@ -24,6 +26,7 @@ export type FeatureFlags = {
 const DEFAULTS: FeatureFlags = {
   securityVertical: true,
   careVertical: true,
+  robotVertical: true,
   partnerWhiteLabel: true,
   payments: false,
   webhooks: false,

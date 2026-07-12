@@ -26,6 +26,18 @@ describe("detectInconsistencies", () => {
     });
     expect(signals.some((s) => s.code === "MISSING_SIA")).toBe(true);
   });
+
+  it("flags robot roles without AI safety governance", () => {
+    const signals = detectInconsistencies({
+      claimedCategories: ["robot-home-helper"],
+      credentials: [
+        { type: "ID", verificationStatus: "PENDING" },
+        { type: "RTW", verificationStatus: "PENDING" },
+      ],
+    });
+    expect(signals.some((s) => s.code === "MISSING_AI_SAFETY")).toBe(true);
+    expect(signals.some((s) => s.code === "MISSING_POLICY_CLEARANCE")).toBe(true);
+  });
 });
 
 describe("advisoryRiskScore", () => {

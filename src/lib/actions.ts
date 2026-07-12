@@ -660,6 +660,42 @@ export async function joinCareWaitlist() {
   revalidatePath("/provider");
 }
 
+export async function joinRobotWaitlist() {
+  const user = await requireUser(["PROVIDER"]);
+  const profile = await db.providerProfile.findUnique({ where: { userId: user.id } });
+  if (!profile) throw new Error("No provider profile");
+  const cat = await db.category.findUnique({
+    where: { slug: "robot-care-home-support" },
+  });
+  if (!cat) throw new Error("Category missing");
+
+  await db.providerCategory.upsert({
+    where: {
+      providerId_categoryId: { providerId: profile.id, categoryId: cat.id },
+    },
+    update: { status: "WAITLIST", submittedAt: new Date() },
+    create: {
+      providerId: profile.id,
+      categoryId: cat.id,
+      status: "WAITLIST",
+      submittedAt: new Date(),
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "ProviderCategory",
+    entityId: cat.id,
+    action: "ROBOT_CARE_WAITLIST",
+    payload: { slug: cat.slug },
+    eventType: "provider.category_submitted",
+  });
+
+  revalidatePath("/verticals/robots");
+  revalidatePath("/provider");
+  revalidatePath("/provider/categories");
+}
+
 export async function scheduleVerificationInterview(formData: FormData) {
   const user = await requireUser(["OPS", "ADMIN"]);
   const providerId = String(formData.get("providerId") ?? "");

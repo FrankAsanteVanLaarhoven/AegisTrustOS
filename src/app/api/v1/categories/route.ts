@@ -27,6 +27,7 @@ export async function GET() {
   const filtered = categories.filter((c) => {
     if (c.phase === "SECURITY" && !features.securityVertical) return false;
     if (c.phase === "CARE" && !features.careVertical) return false;
+    if (c.phase === "ROBOTICS" && !features.robotVertical) return false;
     return true;
   });
 
