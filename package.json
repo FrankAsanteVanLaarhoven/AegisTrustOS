@@ -13,6 +13,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
     "export:audit": "tsx scripts/export-audit.ts",
+    "job:expiry": "tsx scripts/expiry-sweep.ts",
     "postinstall": "prisma generate"
   },
   "prisma": {

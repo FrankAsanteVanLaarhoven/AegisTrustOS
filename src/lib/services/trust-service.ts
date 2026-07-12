@@ -144,6 +144,16 @@ export async function recordTrustDecision(input: {
       "@/lib/services/passport-service"
     );
     await issueOrRefreshPassport(providerId, reviewerId);
+    const providerUser = await db.providerProfile.findUnique({
+      where: { id: providerId },
+      select: { userId: true },
+    });
+    if (providerUser) {
+      const { notifyTrustCleared } = await import(
+        "@/lib/services/notify-service"
+      );
+      await notifyTrustCleared(providerUser.userId, categorySlug).catch(() => undefined);
+    }
   } else if (decision === "REJECT") {
     const { revokePassport } = await import("@/lib/services/passport-service");
     await revokePassport(providerId, reviewerId);

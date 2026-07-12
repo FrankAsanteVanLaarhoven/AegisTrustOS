@@ -2,9 +2,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { apiOk, apiErr } from "@/lib/api/envelope";
-import { getIdvProvider } from "@/lib/idv/provider";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
+import { getContainer } from "@/lib/container";
 import { nanoid } from "nanoid";
 
 export const dynamic = "force-dynamic";
@@ -35,20 +33,28 @@ export async function POST(req: Request) {
     return apiErr("VALIDATION", "ID and selfie captures required");
   }
 
-  const uploadDir = path.join(process.cwd(), "uploads", "idv", profile.id);
-  await mkdir(uploadDir, { recursive: true });
-  const idPath = path.join(uploadDir, `id-${nanoid(8)}.jpg`);
-  const selfiePath = path.join(uploadDir, `selfie-${nanoid(8)}.jpg`);
-
-  async function saveDataUrl(dataUrl: string, filePath: string) {
+  function dataUrlToBuffer(dataUrl: string): Buffer {
     const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
-    await writeFile(filePath, Buffer.from(base64, "base64"));
+    return Buffer.from(base64, "base64");
   }
 
-  await saveDataUrl(body.idImageDataUrl, idPath);
-  await saveDataUrl(body.selfieDataUrl, selfiePath);
+  const { storage, idv } = getContainer();
+  const idKey = `idv/${profile.id}/id-${nanoid(8)}.jpg`;
+  const selfieKey = `idv/${profile.id}/selfie-${nanoid(8)}.jpg`;
 
-  const idv = getIdvProvider();
+  const idStored = await storage.put({
+    key: idKey,
+    data: dataUrlToBuffer(body.idImageDataUrl),
+    contentType: "image/jpeg",
+    encrypt: true,
+  });
+  const selfieStored = await storage.put({
+    key: selfieKey,
+    data: dataUrlToBuffer(body.selfieDataUrl),
+    contentType: "image/jpeg",
+    encrypt: true,
+  });
+
   const started = await idv.startCheck({
     fullName: profile.user.name,
     email: profile.user.email,
@@ -65,8 +71,9 @@ export async function POST(req: Request) {
       completedAt: new Date(),
       rawResultJson: JSON.stringify({
         ...result.raw,
-        idFile: idPath,
-        selfieFile: selfiePath,
+        idObjectKey: idStored.key,
+        selfieObjectKey: selfieStored.key,
+        encrypted: true,
         clientLiveness: body.livenessScore,
       }),
     },
@@ -78,9 +85,13 @@ export async function POST(req: Request) {
       type: "ID",
       title: "Camera-captured photo ID",
       verificationStatus: result.status === "PASSED" ? "PENDING" : "AI_FLAGGED",
-      notes: "Captured via on-site identity flow",
-      filePath: idPath,
-      extractedJson: JSON.stringify({ source: "camera_idv", checkId: check.id }),
+      notes: "Captured via on-site identity flow (encrypted store)",
+      filePath: idStored.key,
+      extractedJson: JSON.stringify({
+        source: "camera_idv",
+        checkId: check.id,
+        storageKey: idStored.key,
+      }),
     },
   });
 
@@ -89,7 +100,11 @@ export async function POST(req: Request) {
     entityType: "IdvCheck",
     entityId: check.id,
     action: "IDV_CAMERA_COMPLETE",
-    payload: { status: result.status, liveness: body.livenessScore },
+    payload: {
+      status: result.status,
+      liveness: body.livenessScore,
+      encrypted: true,
+    },
     eventType: "provider.idv_completed",
   });
 
@@ -97,5 +112,6 @@ export async function POST(req: Request) {
     checkId: check.id,
     status: result.status,
     livenessScore: body.livenessScore ?? result.livenessScore,
+    encrypted: true,
   });
 }

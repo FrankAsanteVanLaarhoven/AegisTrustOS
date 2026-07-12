@@ -86,10 +86,14 @@ Palantir-grade ops aesthetic + stealth controls: hardened headers, rate-limited 
 | Version + flags | `GET /api/v1/version` |
 | Categories | `GET /api/v1/categories` |
 | Session | `GET /api/v1/me` |
+| Payment intent | `POST /api/v1/payments/intent` |
+| Expiry sweep | `POST /api/v1/ops/expiry` (OPS) |
 | Outbox peek | `GET /api/v1/events/outbox` (OPS) |
 | Audit export | `npm run export:audit` |
+| Expiry job | `npm run job:expiry` |
 
-See [docs/FUTURE_PROOF.md](./docs/FUTURE_PROOF.md) and [docs/EXTENSIONS.md](./docs/EXTENSIONS.md).
+Adapters: encrypted local storage, notification outbox, payments stub, IDV port.  
+See [docs/PRODUCTION_PATH.md](./docs/PRODUCTION_PATH.md), [docs/FUTURE_PROOF.md](./docs/FUTURE_PROOF.md).
 
 ## Docs
 

@@ -47,7 +47,7 @@ export default async function WalletPage() {
         <h1 className="text-2xl font-semibold text-zinc-100">Credential wallet</h1>
         <p className="text-sm text-zinc-500">
           Upload evidence for category compliance. Verification status is set by
-          Trust &amp; Safety — not by AI alone.
+          Trust &amp; Safety after human review.
         </p>
       </div>
 

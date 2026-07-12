@@ -93,6 +93,9 @@ export default async function OpsDashboard() {
           <Link href="/ops/kpis" className={buttonClass("secondary", "sm")}>
             KPIs
           </Link>
+          <Link href="/ops/expiry" className={buttonClass("secondary", "sm")}>
+            Expiry
+          </Link>
           <Link href="/ops/incidents" className={buttonClass("secondary", "sm")}>
             Incidents
           </Link>

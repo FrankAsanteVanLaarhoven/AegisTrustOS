@@ -596,3 +596,50 @@ model VerificationInterview {
 
   @@index([providerId, status])
 }
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+model NotificationOutbox {
+  id          String             @id
+  channel     String
+  toAddress   String
+  subject     String
+  body        String
+  templateKey String?
+  status      NotificationStatus @default(QUEUED)
+  metaJson    String             @default("{}")
+  createdAt   DateTime           @default(now())
+  sentAt      DateTime?
+
+  @@index([status, createdAt])
+}
+
+enum PaymentStatus {
+  REQUIRES_PAYMENT
+  PROCESSING
+  SUCCEEDED
+  CANCELLED
+}
+
+model PaymentIntent {
+  id           String        @id
+  amountPence  Int
+  currency     String        @default("gbp")
+  status       PaymentStatus @default(REQUIRES_PAYMENT)
+  clientId     String
+  providerId   String?
+  bookingId    String?
+  description  String?
+  clientSecret String?
+  providerRef  String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([clientId])
+  @@index([bookingId])
+  @@index([status])
+}

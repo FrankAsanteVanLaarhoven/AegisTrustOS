@@ -475,6 +475,16 @@ export async function createAndSignContracts(formData: FormData) {
     eventType: "booking.created",
   });
 
+  {
+    const { notifyBookingCreated } = await import("@/lib/services/notify-service");
+    await notifyBookingCreated({
+      clientUserId: req.client.userId,
+      providerUserId: provider.userId,
+      title: req.title,
+      bookingId: booking.id,
+    }).catch(() => undefined);
+  }
+
   revalidatePath("/client");
   revalidatePath(`/client/requests/${requestId}`);
   revalidatePath("/provider");
@@ -581,6 +591,63 @@ export async function openIncident(formData: FormData) {
     payload: { severity },
     eventType: "incident.opened",
   });
+
+  // HIGH/CRITICAL → suspend passport (trust freeze)
+  if (
+    providerId &&
+    (severity === "HIGH" || severity === "CRITICAL")
+  ) {
+    const passport = await db.aegisPassport.findUnique({
+      where: { providerId },
+    });
+    if (passport && passport.status === "ACTIVE") {
+      await db.aegisPassport.update({
+        where: { providerId },
+        data: { status: "SUSPENDED" },
+      });
+      await writeAudit({
+        actorId: user.id,
+        entityType: "AegisPassport",
+        entityId: passport.id,
+        action: "PASSPORT_SUSPEND_INCIDENT",
+        payload: { incidentId: incident.id, severity },
+      });
+      const prov = await db.providerProfile.findUnique({
+        where: { id: providerId },
+        select: { userId: true },
+      });
+      if (prov) {
+        const { notifyPassportSuspended } = await import(
+          "@/lib/services/notify-service"
+        );
+        await notifyPassportSuspended(
+          prov.userId,
+          `Incident ${severity}: ${summary}`,
+        ).catch(() => undefined);
+      }
+    }
+    await db.providerProfile.update({
+      where: { id: providerId },
+      data: { overallStatus: "SUSPENDED" },
+    }).catch(() => undefined);
+  }
+
+  {
+    const { notifyIncident } = await import("@/lib/services/notify-service");
+    let providerUserId: string | null = null;
+    if (providerId) {
+      const p = await db.providerProfile.findUnique({
+        where: { id: providerId },
+        select: { userId: true },
+      });
+      providerUserId = p?.userId ?? null;
+    }
+    await notifyIncident({
+      summary,
+      severity,
+      providerUserId,
+    }).catch(() => undefined);
+  }
 
   revalidatePath("/ops/incidents");
   revalidatePath("/ops/kpis");

@@ -2,7 +2,6 @@ import { z } from "zod";
 
 /**
  * Zod-validated environment. Fails fast in production if critical secrets missing.
- * Future-proof: add keys here; never read process.env ad-hoc in domain code.
  */
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
@@ -12,13 +11,22 @@ const envSchema = z.object({
   IDV_VENDOR: z.enum(["MOCK", "TRULIOO", "SOCURE"]).default("MOCK"),
   JURISDICTION_DEFAULT: z.string().default("UK"),
   SESSION_MAX_AGE_HOURS: z.coerce.number().min(1).max(168).default(8),
-  AUDIT_RETENTION_DAYS: z.coerce.number().min(30).default(2555), // ~7 years default
+  AUDIT_RETENTION_DAYS: z.coerce.number().min(30).default(2555),
   RATE_LIMIT_BACKEND: z.enum(["memory", "redis"]).default("memory"),
   REDIS_URL: z.string().optional(),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   APP_VERSION: z.string().optional(),
-  /** Comma-separated feature flags override, e.g. "securityVertical,careVertical" */
   FEATURE_FLAGS: z.string().optional(),
+  /** AES key material for encrypted document store (defaults to AUTH_SECRET) */
+  DOCUMENT_ENCRYPTION_KEY: z.string().optional(),
+  STORAGE_BACKEND: z.enum(["local_encrypted", "s3"]).default("local_encrypted"),
+  S3_BUCKET: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  NOTIFY_BACKEND: z.enum(["file", "ses", "postmark"]).default("file"),
+  PAYMENTS_BACKEND: z.enum(["stub", "stripe"]).default("stub"),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  /** Postgres helper: set when using docker-compose */
+  // DATABASE_URL=postgresql://aegis:aegis@localhost:5433/aegis
 });
 
 export type AppEnv = z.infer<typeof envSchema> & {

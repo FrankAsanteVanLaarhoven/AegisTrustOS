@@ -24,6 +24,9 @@ export async function GET() {
     version: env.APP_VERSION ?? process.env.npm_package_version ?? "0.1.0",
     jurisdictionDefault: env.JURISDICTION_DEFAULT,
     idvVendor: env.IDV_VENDOR,
+    storage: env.STORAGE_BACKEND,
+    notify: env.NOTIFY_BACKEND,
+    payments: env.PAYMENTS_BACKEND,
     features: getFeatures(),
     timestamp: new Date().toISOString(),
   };
