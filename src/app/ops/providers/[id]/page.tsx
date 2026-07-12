@@ -236,7 +236,7 @@ export default async function OpsProviderPage({
       <Card>
         <CardHeader
           title="Human decision"
-          subtitle="This is the only path to VERIFIED status"
+          subtitle="Only path to VERIFIED. CRITICAL categories require two distinct OPS reviewers (dual control)."
         />
         <CardBody>
           <form action={trustDecision} className="space-y-3">

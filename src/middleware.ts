@@ -9,6 +9,7 @@ import {
   STEALTH_ERRORS,
   SESSION_COOKIE,
 } from "@/lib/security-edge";
+import { upstashRateLimit } from "@/lib/adapters/rate-limit/upstash";
 
 function applySecurityHeaders(res: NextResponse) {
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) {
@@ -17,6 +18,24 @@ function applySecurityHeaders(res: NextResponse) {
   res.headers.delete("x-powered-by");
   res.headers.delete("X-Powered-By");
   return res;
+}
+
+async function limit(
+  key: string,
+  limitN: number,
+  windowMs: number,
+): Promise<{ ok: boolean; remaining: number; resetAt: number }> {
+  if (
+    process.env.UPSTASH_REDIS_REST_URL &&
+    process.env.UPSTASH_REDIS_REST_TOKEN
+  ) {
+    try {
+      return await upstashRateLimit({ key, limit: limitN, windowMs });
+    } catch {
+      /* fall through to memory */
+    }
+  }
+  return rateLimit({ key, limit: limitN, windowMs });
 }
 
 export async function middleware(req: NextRequest) {
@@ -31,11 +50,11 @@ export async function middleware(req: NextRequest) {
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       req.headers.get("x-real-ip") ||
       "unknown";
-    const rl = rateLimit({
-      key: `auth:${ip}:${pathname}`,
-      limit: pathname.startsWith("/api/auth") ? 30 : 40,
-      windowMs: 60_000,
-    });
+    const rl = await limit(
+      `auth:${ip}:${pathname}`,
+      pathname.startsWith("/api/auth") ? 30 : 40,
+      60_000,
+    );
     if (!rl.ok) {
       const res = NextResponse.json(
         { error: STEALTH_ERRORS.rateLimit },
@@ -51,11 +70,7 @@ export async function middleware(req: NextRequest) {
       req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
       req.headers.get("x-real-ip") ||
       "unknown";
-    const rl = rateLimit({
-      key: `global:${ip}`,
-      limit: 300,
-      windowMs: 60_000,
-    });
+    const rl = await limit(`global:${ip}`, 300, 60_000);
     if (!rl.ok) {
       const res = new NextResponse(STEALTH_ERRORS.rateLimit, { status: 429 });
       return applySecurityHeaders(res);

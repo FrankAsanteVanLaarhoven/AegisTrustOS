@@ -22,9 +22,13 @@ const envSchema = z.object({
   STORAGE_BACKEND: z.enum(["local_encrypted", "s3"]).default("local_encrypted"),
   S3_BUCKET: z.string().optional(),
   S3_REGION: z.string().optional(),
-  NOTIFY_BACKEND: z.enum(["file", "ses", "postmark"]).default("file"),
+  NOTIFY_BACKEND: z.enum(["file", "ses", "postmark", "webhook"]).default("file"),
+  NOTIFY_WEBHOOK_URL: z.string().optional(),
   PAYMENTS_BACKEND: z.enum(["stub", "stripe"]).default("stub"),
   STRIPE_SECRET_KEY: z.string().optional(),
+  UPSTASH_REDIS_REST_URL: z.string().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  DOMAIN_EVENT_WEBHOOK_URL: z.string().optional(),
   /** Postgres helper: set when using docker-compose */
   // DATABASE_URL=postgresql://aegis:aegis@localhost:5433/aegis
 });

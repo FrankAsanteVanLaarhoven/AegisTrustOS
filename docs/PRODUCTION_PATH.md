@@ -32,24 +32,36 @@ npm run db:seed
 | `IDV_VENDOR` | MOCK \| TRULIOO \| SOCURE | Identity vendor |
 | `STORAGE_BACKEND` | local_encrypted \| s3 | Document store |
 | `DOCUMENT_ENCRYPTION_KEY` | secret | AES key material |
-| `NOTIFY_BACKEND` | file \| ses \| postmark | Email rail |
+| `S3_BUCKET` / `S3_REGION` | … | When `STORAGE_BACKEND=s3` (+ AWS creds) |
+| `NOTIFY_WEBHOOK_URL` | https://… | Email/SMS bridge (Zapier/n8n/mailer) |
 | `PAYMENTS_BACKEND` | stub \| stripe | Payments |
-| `STRIPE_SECRET_KEY` | sk_… | When stripe |
+| `STRIPE_SECRET_KEY` | sk_… | Live Stripe PaymentIntents |
+| `UPSTASH_REDIS_REST_URL` + `TOKEN` | … | Multi-instance rate limits |
+| `DOMAIN_EVENT_WEBHOOK_URL` | https://… | Outbox drain target |
 
 ## Jobs
 
 ```bash
-npm run job:expiry   # credential expiry + passport suspend
-npm run export:audit # SIEM NDJSON
+npm run job:expiry        # credential expiry + passport suspend
+npm run job:drain-outbox  # publish domain events (+ optional webhook)
+npm run export:audit      # SIEM NDJSON
 ```
+
+## Dual control
+
+CRITICAL categories (care, care-home robots, etc.) require **two distinct OPS/ADMIN reviewers** to CLEAR before VERIFIED / passport issue.
 
 ## SOTA checklist (remaining)
 
+- [x] Encrypted local evidence store  
+- [x] Notification outbox + webhook bridge  
+- [x] Payment intent stub + Stripe adapter  
+- [x] S3 storage adapter (needs `@aws-sdk/client-s3` + bucket)  
+- [x] Upstash Redis rate limits  
+- [x] Dual-control CLEAR for CRITICAL  
+- [x] Outbox drain job  
 - [ ] Live IDV vendor keys + webhook callbacks  
-- [ ] S3 adapter implementation  
-- [ ] SES/Postmark send path  
-- [ ] Stripe Connect capture on booking complete  
-- [ ] Redis rate limits multi-instance  
+- [ ] Stripe Connect marketplace split  
 - [ ] CI Playwright + migrate deploy pipeline  
 - [ ] DPIA + lawyer-reviewed terms  
 
