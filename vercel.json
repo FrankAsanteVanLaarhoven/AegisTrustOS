@@ -13,11 +13,5 @@
         { "key": "Referrer-Policy", "value": "no-referrer" }
       ]
     }
-  ],
-  "crons": [
-    {
-      "path": "/api/v1/ops/expiry",
-      "schedule": "0 * * * *"
-    }
   ]
 }

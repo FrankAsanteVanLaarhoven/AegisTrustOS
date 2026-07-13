@@ -96,7 +96,9 @@ AWS_REGION=eu-west-2
 4. Set GitHub secrets → push to `main` → `CD · Vercel` runs  
 5. Set `CRON_SECRET` in Vercel + GitHub for scheduled expiry  
 
-`vercel.json` includes hourly cron hit to `/api/v1/ops/expiry` (authorize with `CRON_SECRET`).
+Expiry cron: GitHub Actions `cd-jobs.yml` + `CRON_SECRET` (Vercel Hobby has no Cron Jobs; do not put `crons` in `vercel.json` on free tier).
+
+If the dashboard says **“No Production Deployment / domain not serving traffic”**, see [VERCEL_SETUP.md](./VERCEL_SETUP.md) — usually no successful Production deploy yet, or build failed.
 
 ---
 

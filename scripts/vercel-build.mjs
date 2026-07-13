@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 /**
  * Vercel / production build:
- * 1. Switch Prisma to postgresql when DATABASE_URL is Postgres
+ * 1. Switch Prisma provider from DATABASE_URL (postgres → postgresql)
  * 2. prisma generate
- * 3. prisma db push (schema sync — pilot; replace with migrate deploy later)
+ * 3. prisma db push (best-effort — never blocks the build)
  * 4. next build
+ *
+ * Cron / expiry: use GitHub Actions cd-jobs.yml (Hobby Vercel has no cron).
  */
 import { spawnSync } from "child_process";
 import path from "path";
@@ -21,24 +23,42 @@ function run(cmd, args, opts = {}) {
     shell: process.platform === "win32",
     ...opts,
   });
-  if (r.status !== 0) process.exit(r.status ?? 1);
+  return r.status ?? 1;
 }
 
-run("node", ["scripts/set-prisma-provider.mjs"]);
+function runOrExit(cmd, args) {
+  const code = run(cmd, args);
+  if (code !== 0) process.exit(code);
+}
 
-run("npx", ["prisma", "generate"]);
+runOrExit("node", ["scripts/set-prisma-provider.mjs"]);
+runOrExit("npx", ["prisma", "generate"]);
 
 const dbUrl = process.env.DATABASE_URL ?? "";
 const isPostgres =
   dbUrl.startsWith("postgres://") || dbUrl.startsWith("postgresql://");
 
 if (isPostgres && process.env.SKIP_DB_PUSH !== "1") {
-  console.log("[aegis] Syncing schema to Postgres (db push)…");
-  run("npx", ["prisma", "db", "push", "--skip-generate", "--accept-data-loss"]);
+  console.log("[aegis] Syncing schema to Postgres (db push, best-effort)…");
+  const code = run("npx", [
+    "prisma",
+    "db",
+    "push",
+    "--skip-generate",
+    "--accept-data-loss",
+  ]);
+  if (code !== 0) {
+    console.warn(
+      "[aegis] db push failed — continuing build. Run `npx prisma db push` against DATABASE_URL after deploy.",
+    );
+  }
 } else if (!isPostgres) {
   console.log(
-    "[aegis] DATABASE_URL is not Postgres — skipping db push (local/sqlite build)",
+    "[aegis] No Postgres DATABASE_URL — build with SQLite client. Set DATABASE_URL on Vercel for production data.",
   );
 }
 
-run("npx", ["next", "build"]);
+const buildCode = run("npx", ["next", "build"]);
+if (buildCode !== 0) process.exit(buildCode);
+
+console.log("[aegis] build:deploy complete");
