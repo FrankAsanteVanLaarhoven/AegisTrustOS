@@ -596,9 +596,27 @@ async function main() {
   await db.review.create({
     data: {
       bookingId: booking.id,
+      direction: "CLIENT_TO_PROVIDER",
       rating: 5,
+      reliability: 5,
+      professionalism: 5,
+      communication: 5,
       body: "Exceptional discretion and pace. Will rebook.",
       createdById: clientUser.id,
+      visibility: "PUBLIC",
+    },
+  });
+  await db.review.create({
+    data: {
+      bookingId: booking.id,
+      direction: "PROVIDER_TO_CLIENT",
+      rating: 5,
+      reliability: 5,
+      professionalism: 5,
+      communication: 4,
+      body: "Clear brief and respectful household.",
+      createdById: paUser.id,
+      visibility: "PUBLIC",
     },
   });
 

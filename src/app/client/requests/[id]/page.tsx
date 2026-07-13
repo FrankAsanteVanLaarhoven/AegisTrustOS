@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { formatDate, parseJsonArray } from "@/lib/utils";
+import { MemberRatingBadge } from "@/components/trust/MemberRating";
+import { getProviderRatingMap } from "@/lib/services/ratings-service";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +55,10 @@ export default async function RequestDetailPage({
   ) {
     redirect("/client");
   }
+
+  const ratingMap = await getProviderRatingMap(
+    req.matches.map((m) => m.providerId),
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-10 sm:px-6">
@@ -127,6 +133,10 @@ export default async function RequestDetailPage({
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-1">
+                    <MemberRatingBadge
+                      average={ratingMap.get(m.providerId)?.average}
+                      count={ratingMap.get(m.providerId)?.count}
+                    />
                     <Badge tone={m.status === "ACCEPTED" ? "success" : "muted"}>
                       {m.status}
                     </Badge>

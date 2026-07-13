@@ -334,6 +334,11 @@ export async function createServiceRequest(formData: FormData) {
     },
   });
 
+  const { getProviderRatingMap } = await import(
+    "@/lib/services/ratings-service"
+  );
+  const ratingMap = await getProviderRatingMap(providers.map((p) => p.id));
+
   const candidates = providers.flatMap((p) =>
     p.categories
       .filter((c) => c.categoryId === categoryId)
@@ -359,6 +364,7 @@ export async function createServiceRequest(formData: FormData) {
         categorySlug: c.category.slug,
         priorBookingsWithClient: p.bookings.length,
         suspended: p.overallStatus === "SUSPENDED",
+        reviewAvg: ratingMap.get(p.id)?.average ?? null,
       })),
   );
 
@@ -584,10 +590,21 @@ export async function addServiceLog(formData: FormData) {
   revalidatePath("/client/bookings");
 }
 
+function clampRating(n: number) {
+  return Math.min(5, Math.max(1, Math.round(n)));
+}
+
 export async function leaveReview(formData: FormData) {
   const user = await requireUser(["CLIENT"]);
   const bookingId = String(formData.get("bookingId") ?? "");
-  const rating = Number(formData.get("rating") ?? 5);
+  const rating = clampRating(Number(formData.get("rating") ?? 5));
+  const reliability = clampRating(Number(formData.get("reliability") ?? rating));
+  const professionalism = clampRating(
+    Number(formData.get("professionalism") ?? rating),
+  );
+  const communication = clampRating(
+    Number(formData.get("communication") ?? rating),
+  );
   const body = String(formData.get("body") ?? "").trim();
 
   const booking = await db.booking.findUnique({
@@ -595,19 +612,107 @@ export async function leaveReview(formData: FormData) {
     include: { client: true },
   });
   if (!booking || booking.client.userId !== user.id) throw new Error("Forbidden");
+  if (booking.status !== "COMPLETED") throw new Error("Booking not completed");
 
   await db.review.upsert({
-    where: { bookingId },
-    update: { rating, body },
+    where: {
+      bookingId_direction: {
+        bookingId,
+        direction: "CLIENT_TO_PROVIDER",
+      },
+    },
+    update: {
+      rating,
+      reliability,
+      professionalism,
+      communication,
+      body: body || null,
+    },
     create: {
       bookingId,
-      rating: Math.min(5, Math.max(1, rating)),
+      direction: "CLIENT_TO_PROVIDER",
+      rating,
+      reliability,
+      professionalism,
+      communication,
       body: body || null,
       createdById: user.id,
+      visibility: "PUBLIC",
     },
   });
 
+  await writeAudit({
+    actorId: user.id,
+    entityType: "Review",
+    entityId: bookingId,
+    action: "MEMBER_RATING_CLIENT_TO_PROVIDER",
+    payload: { rating, reliability, professionalism, communication },
+  });
+
   revalidatePath("/client/bookings");
+  revalidatePath("/provider");
+  revalidatePath("/ops/kpis");
+}
+
+export async function leaveProviderReview(formData: FormData) {
+  const user = await requireUser(["PROVIDER"]);
+  const bookingId = String(formData.get("bookingId") ?? "");
+  const rating = clampRating(Number(formData.get("rating") ?? 5));
+  const reliability = clampRating(Number(formData.get("reliability") ?? rating));
+  const professionalism = clampRating(
+    Number(formData.get("professionalism") ?? rating),
+  );
+  const communication = clampRating(
+    Number(formData.get("communication") ?? rating),
+  );
+  const body = String(formData.get("body") ?? "").trim();
+
+  const profile = await db.providerProfile.findUnique({
+    where: { userId: user.id },
+  });
+  if (!profile) throw new Error("No provider profile");
+
+  const booking = await db.booking.findUnique({ where: { id: bookingId } });
+  if (!booking || booking.providerId !== profile.id) throw new Error("Forbidden");
+  if (booking.status !== "COMPLETED") throw new Error("Booking not completed");
+
+  await db.review.upsert({
+    where: {
+      bookingId_direction: {
+        bookingId,
+        direction: "PROVIDER_TO_CLIENT",
+      },
+    },
+    update: {
+      rating,
+      reliability,
+      professionalism,
+      communication,
+      body: body || null,
+    },
+    create: {
+      bookingId,
+      direction: "PROVIDER_TO_CLIENT",
+      rating,
+      reliability,
+      professionalism,
+      communication,
+      body: body || null,
+      createdById: user.id,
+      visibility: "PUBLIC",
+    },
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "Review",
+    entityId: bookingId,
+    action: "MEMBER_RATING_PROVIDER_TO_CLIENT",
+    payload: { rating },
+  });
+
+  revalidatePath("/provider/bookings");
+  revalidatePath("/client");
   revalidatePath("/ops/kpis");
 }
 

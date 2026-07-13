@@ -11,6 +11,8 @@ import {
   runIdvCheck,
 } from "@/lib/actions";
 import { AegisPassportCard } from "@/components/trust/AegisPassportCard";
+import { MemberRatingCard } from "@/components/trust/MemberRating";
+import { getProviderRatingSummary } from "@/lib/services/ratings-service";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +47,7 @@ export default async function ProviderDashboard() {
   }
 
   const skills = parseJsonArray(profile.skillsJson).join(", ");
+  const ratings = await getProviderRatingSummary(profile.id);
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-10 sm:px-6">
@@ -69,16 +72,28 @@ export default async function ProviderDashboard() {
             {profile.overallStatus}
           </Badge>
           <Badge tone="gold">Advisory risk {profile.riskScore}/100</Badge>
+          {ratings.average != null ? (
+            <Badge tone="gold">
+              ★ {ratings.average.toFixed(1)} ({ratings.count})
+            </Badge>
+          ) : (
+            <Badge tone="muted">unrated</Badge>
+          )}
         </div>
       </div>
 
-      {profile.passport?.status === "ACTIVE" ? (
-        <AegisPassportCard
-          passport={profile.passport}
-          providerName={session.user.name}
-          city={profile.city}
-        />
-      ) : null}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {profile.passport?.status === "ACTIVE" ? (
+          <AegisPassportCard
+            passport={profile.passport}
+            providerName={session.user.name}
+            city={profile.city}
+          />
+        ) : (
+          <div />
+        )}
+        <MemberRatingCard title="Your member ratings" summary={ratings} />
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <Link href="/provider/verify" className={buttonClass("primary", "sm")}>

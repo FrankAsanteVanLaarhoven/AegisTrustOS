@@ -502,7 +502,7 @@ model Booking {
   updatedAt      DateTime      @updatedAt
 
   logs      ServiceLog[]
-  review    Review?
+  reviews   Review[]
   incidents Incident[]
 
   @@index([tenantId])
@@ -520,16 +520,30 @@ model ServiceLog {
   createdAt   DateTime       @default(now())
 }
 
+enum ReviewDirection {
+  CLIENT_TO_PROVIDER
+  PROVIDER_TO_CLIENT
+}
+
+/// Member ratings after completed bookings (bidirectional)
 model Review {
-  id         String   @id @default(cuid())
-  bookingId  String   @unique
-  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  rating     Int
-  body       String?
-  visibility String   @default("PUBLIC")
-  createdById String
-  createdBy  User     @relation(fields: [createdById], references: [id])
-  createdAt  DateTime @default(now())
+  id               String          @id @default(cuid())
+  bookingId        String
+  booking          Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  direction        ReviewDirection @default(CLIENT_TO_PROVIDER)
+  /// Overall 1–5
+  rating           Int
+  reliability      Int?
+  professionalism  Int?
+  communication    Int?
+  body             String?
+  visibility       String          @default("PUBLIC")
+  createdById      String
+  createdBy        User            @relation(fields: [createdById], references: [id])
+  createdAt        DateTime        @default(now())
+
+  @@unique([bookingId, direction])
+  @@index([direction, rating])
 }
 
 model IdvCheck {
