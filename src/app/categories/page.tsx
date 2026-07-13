@@ -1,15 +1,47 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { groupCategories } from "@/lib/categories/groups";
+import { groupCategories, type GroupableCategory } from "@/lib/categories/groups";
+import { CATEGORY_SEEDS } from "@/lib/compliance/matrix";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardBody } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
+function seedsAsCategories(): GroupableCategory[] {
+  return CATEGORY_SEEDS.map((c, i) => ({
+    id: `seed-${c.slug}`,
+    slug: c.slug,
+    name: c.name,
+    description: c.description,
+    mode: c.mode,
+    phase: c.phase,
+    riskLevel: c.riskLevel,
+    sortOrder: c.sortOrder,
+    groupKey: c.groupKey,
+    groupLabel: c.groupLabel,
+    groupSort: c.groupSort,
+  }));
+}
+
 export default async function CategoriesPage() {
-  const categories = await db.category.findMany({
-    orderBy: [{ groupSort: "asc" }, { sortOrder: "asc" }],
-  });
+  let categories: GroupableCategory[] = [];
+  let source: "database" | "seed_fallback" = "database";
+  let dbError: string | null = null;
+
+  try {
+    categories = await db.category.findMany({
+      orderBy: [{ groupSort: "asc" }, { sortOrder: "asc" }],
+    });
+    if (!categories.length) {
+      categories = seedsAsCategories();
+      source = "seed_fallback";
+    }
+  } catch (e) {
+    dbError = e instanceof Error ? e.message : "database unavailable";
+    categories = seedsAsCategories();
+    source = "seed_fallback";
+  }
+
   const groups = groupCategories(categories);
 
   return (
@@ -19,6 +51,21 @@ export default async function CategoriesPage() {
         Grouped premium services. Active categories support full request → match
         → contract. Security and care remain waitlist scaffolds.
       </p>
+
+      {source === "seed_fallback" ? (
+        <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90">
+          <p className="font-medium">Showing built-in catalogue (database offline)</p>
+          <p className="mt-1 text-xs text-amber-100/70">
+            Set <code className="text-amber-50">DATABASE_URL</code> to a Postgres
+            connection (e.g. Neon) in Vercel Production env, redeploy, then seed.
+            {dbError ? (
+              <span className="mt-1 block font-mono text-[10px] opacity-80">
+                {dbError.slice(0, 160)}
+              </span>
+            ) : null}
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-12 space-y-14">
         {groups.map((g) => (
@@ -38,49 +85,26 @@ export default async function CategoriesPage() {
               {g.items.map((c) => (
                 <Card key={c.id}>
                   <CardBody className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      <Badge tone={c.mode === "ACTIVE" ? "success" : "warn"}>
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-medium text-zinc-100">{c.name}</h3>
+                      <Badge
+                        tone={
+                          c.mode === "ACTIVE"
+                            ? "success"
+                            : c.mode === "WAITLIST"
+                              ? "warn"
+                              : "muted"
+                        }
+                      >
                         {c.mode}
                       </Badge>
-                      <Badge tone="muted">{c.riskLevel}</Badge>
-                      {"requiresFamilyApproval" in c &&
-                      (c as { requiresFamilyApproval?: boolean })
-                        .requiresFamilyApproval ? (
-                        <Badge tone="warn">family approval</Badge>
-                      ) : null}
-                      {"nhsHomePathway" in c &&
-                      (c as { nhsHomePathway?: boolean }).nhsHomePathway ? (
-                        <Badge tone="gold">home pathway</Badge>
-                      ) : null}
                     </div>
-                    <h3 className="text-lg font-semibold text-zinc-100">{c.name}</h3>
-                    <p className="text-sm text-zinc-400 leading-relaxed">
+                    <p className="text-sm text-zinc-500 line-clamp-3">
                       {c.description}
                     </p>
-                    {c.phase === "SECURITY" ? (
-                      <Link
-                        href="/verticals/security"
-                        className="text-sm font-medium text-[#3dd6c6]"
-                      >
-                        Security vertical →
-                      </Link>
-                    ) : null}
-                    {c.phase === "CARE" ? (
-                      <Link
-                        href="/verticals/care"
-                        className="text-sm font-medium text-[#3dd6c6]"
-                      >
-                        Care vertical →
-                      </Link>
-                    ) : null}
-                    {c.phase === "ROBOTICS" ? (
-                      <Link
-                        href="/verticals/robots"
-                        className="text-sm font-medium text-[#3dd6c6]"
-                      >
-                        Robot helpers →
-                      </Link>
-                    ) : null}
+                    <p className="font-mono text-[10px] text-zinc-600">
+                      {c.phase} · {c.riskLevel}
+                    </p>
                   </CardBody>
                 </Card>
               ))}
@@ -88,6 +112,18 @@ export default async function CategoriesPage() {
           </section>
         ))}
       </div>
+
+      <p className="mt-12 text-sm text-zinc-500">
+        Ready to request?{" "}
+        <Link href="/register" className="text-[#e87722] hover:underline">
+          Enrol as a client
+        </Link>{" "}
+        or{" "}
+        <Link href="/login" className="text-[#e87722] hover:underline">
+          Access
+        </Link>
+        .
+      </p>
     </div>
   );
 }

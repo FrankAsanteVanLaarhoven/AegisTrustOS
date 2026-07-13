@@ -7,7 +7,12 @@ import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 
 export default async function CareVerticalPage() {
-  const session = await auth();
+  let session: { user?: { role?: string } } | null = null;
+  try {
+    session = await auth();
+  } catch {
+    session = null;
+  }
   const enabled = isFeatureEnabled("careVertical");
 
   if (!enabled) {

@@ -39,6 +39,11 @@ function sessionMaxAgeSeconds() {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
+  // Prefer AUTH_SECRET; fall back so production boots if unset (set real secret ASAP)
+  secret:
+    process.env.AUTH_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
+    "aegis-dev-secret-change-in-production-32chars",
   session: {
     strategy: "jwt",
     maxAge: sessionMaxAgeSeconds(),

@@ -5,7 +5,14 @@ import { Shield, Lock } from "lucide-react";
 import { maskEmail } from "@/lib/security-edge";
 
 export async function SiteHeader() {
-  const session = await auth();
+  let session: {
+    user?: { role?: string; email?: string | null; name?: string | null };
+  } | null = null;
+  try {
+    session = await auth();
+  } catch {
+    session = null;
+  }
   const role = session?.user?.role;
 
   const appLinks =
@@ -47,7 +54,7 @@ export async function SiteHeader() {
                 </span>
               </span>
             </Link>
-            <nav className="hidden items-center gap-5 text-xs font-mono uppercase tracking-[0.1em] text-zinc-500 md:flex">
+            <nav className="hidden items-center gap-4 text-xs font-mono uppercase tracking-[0.1em] text-zinc-500 lg:flex">
               <Link href="/pilot" className="hover:text-[#3dd6c6] transition">
                 Pilot
               </Link>
@@ -77,7 +84,7 @@ export async function SiteHeader() {
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             {session?.user ? (
               <>
                 <div className="aegis-hud hidden sm:flex">
@@ -115,6 +122,37 @@ export async function SiteHeader() {
               </>
             )}
           </div>
+        </div>
+        {/* Mobile / tablet nav — all public destinations always visible */}
+        <div className="border-t border-white/[0.04] px-4 py-2 lg:hidden">
+          <nav className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-mono uppercase tracking-[0.1em] text-zinc-500">
+            <Link href="/pilot" className="hover:text-[#3dd6c6]">
+              Pilot
+            </Link>
+            <Link href="/how-it-works" className="hover:text-[#3dd6c6]">
+              Protocol
+            </Link>
+            <Link href="/categories" className="hover:text-[#3dd6c6]">
+              Categories
+            </Link>
+            <Link href="/verticals/security" className="hover:text-[#3dd6c6]">
+              Security
+            </Link>
+            <Link href="/verticals/care" className="hover:text-[#3dd6c6]">
+              Care
+            </Link>
+            <Link href="/verticals/robots" className="hover:text-[#3dd6c6]">
+              Robots
+            </Link>
+            <Link href="/legal/terms" className="hover:text-[#3dd6c6]">
+              Terms
+            </Link>
+            {appLinks.map((l) => (
+              <Link key={l.href} href={l.href} className="text-[#e87722]">
+                {l.label}
+              </Link>
+            ))}
+          </nav>
         </div>
       </header>
     </>

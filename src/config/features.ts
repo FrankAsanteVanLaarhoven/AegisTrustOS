@@ -35,23 +35,30 @@ const DEFAULTS: FeatureFlags = {
 };
 
 export function getFeatures(): FeatureFlags {
-  const env = getEnv();
   const flags = { ...DEFAULTS };
+  try {
+    const env = getEnv();
+    if (!env.FEATURE_FLAGS?.trim()) return flags;
 
-  if (!env.FEATURE_FLAGS?.trim()) return flags;
-
-  for (const raw of env.FEATURE_FLAGS.split(",")) {
-    const token = raw.trim();
-    if (!token) continue;
-    const off = token.startsWith("-") || token.startsWith("!");
-    const key = (off ? token.slice(1) : token) as keyof FeatureFlags;
-    if (key in flags) {
-      flags[key] = !off;
+    for (const raw of env.FEATURE_FLAGS.split(",")) {
+      const token = raw.trim();
+      if (!token) continue;
+      const off = token.startsWith("-") || token.startsWith("!");
+      const key = (off ? token.slice(1) : token) as keyof FeatureFlags;
+      if (key in flags) {
+        flags[key] = !off;
+      }
     }
+  } catch {
+    /* defaults if env fails */
   }
   return flags;
 }
 
 export function isFeatureEnabled(flag: keyof FeatureFlags): boolean {
-  return getFeatures()[flag];
+  try {
+    return getFeatures()[flag];
+  } catch {
+    return DEFAULTS[flag];
+  }
 }
