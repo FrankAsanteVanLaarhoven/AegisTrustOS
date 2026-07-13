@@ -54,9 +54,17 @@ export function detectInconsistencies(input: {
     });
   }
 
-  const careSlugs = ["home-care", "live-in-care", "specialist-carer"];
+  const careSlugs = [
+    "home-care",
+    "live-in-care",
+    "specialist-carer",
+    "companionship",
+    "learning-disability-support",
+    "family-carer",
+    "complex-home-care",
+  ];
   if (input.claimedCategories.some((s) => careSlugs.includes(s))) {
-    if (!types.has("DBS")) {
+    if (!types.has("DBS") && !input.claimedCategories.includes("family-carer")) {
       signals.push({
         code: "MISSING_DBS",
         severity: "high",

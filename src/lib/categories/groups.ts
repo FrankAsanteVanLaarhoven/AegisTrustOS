@@ -11,6 +11,8 @@ export type GroupableCategory = {
   groupLabel: string;
   groupSort: number;
   checklistJson?: string;
+  requiresFamilyApproval?: boolean;
+  nhsHomePathway?: boolean;
 };
 
 export type CategoryGroup = {

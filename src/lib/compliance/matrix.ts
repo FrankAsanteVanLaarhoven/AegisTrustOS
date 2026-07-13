@@ -19,6 +19,8 @@ export type CategorySeed = {
   groupKey: string;
   groupLabel: string;
   groupSort: number;
+  requiresFamilyApproval?: boolean;
+  nhsHomePathway?: boolean;
   checklist: ChecklistItem[];
 };
 
@@ -39,6 +41,14 @@ const plInsurance: ChecklistItem = {
   label: "Public liability insurance",
   required: true,
 };
+
+const careBase: ChecklistItem[] = [
+  ...baseIdentity,
+  { type: "PROOF_OF_ADDRESS", label: "Proof of address", required: true },
+  { type: "DBS", label: "Enhanced DBS", required: true },
+  { type: "SAFEGUARDING", label: "Safeguarding training evidence", required: true },
+  { type: "INSURANCE", label: "Appropriate care / PL insurance", required: true },
+];
 
 export const CATEGORY_SEEDS: CategorySeed[] = [
   // ── Executive & lifestyle ──
@@ -509,26 +519,121 @@ export const CATEGORY_SEEDS: CategorySeed[] = [
     ],
   },
 
-  // ── Care (waitlist) ──
+  // ── Care & NHS home pathway (family-approved security) ──
+  // Not NHS-operated or CQC-registered. Supports home-based care where families
+  // approve carers (including family members, companions, LD support).
+  {
+    slug: "companionship",
+    name: "Companionship at home",
+    phase: "CARE",
+    riskLevel: "CRITICAL",
+    mode: "ACTIVE",
+    description:
+      "Companionship and social support in the person's home. Family/recipient must approve the carer. Not clinical care.",
+    sortOrder: 90,
+    groupKey: "care_home_pathway",
+    groupLabel: "Home care & companionship",
+    groupSort: 88,
+    requiresFamilyApproval: true,
+    nhsHomePathway: true,
+    checklist: [...careBase],
+  },
+  {
+    slug: "learning-disability-support",
+    name: "Learning disability support",
+    phase: "CARE",
+    riskLevel: "CRITICAL",
+    mode: "ACTIVE",
+    description:
+      "Home-based support for people with learning disabilities. Family/advocate approval required. Non-clinical; dual-control clearance.",
+    sortOrder: 91,
+    groupKey: "care_home_pathway",
+    groupLabel: "Home care & companionship",
+    groupSort: 88,
+    requiresFamilyApproval: true,
+    nhsHomePathway: true,
+    checklist: [
+      ...careBase,
+      {
+        type: "CERTIFICATE",
+        label: "LD / autism support training evidence",
+        required: true,
+      },
+    ],
+  },
+  {
+    slug: "family-carer",
+    name: "Family / informal carer",
+    phase: "CARE",
+    riskLevel: "CRITICAL",
+    mode: "ACTIVE",
+    description:
+      "Family members or known informal carers supporting complex care at home. Still requires identity, safeguarding evidence, and recipient/family circle approval on the platform.",
+    sortOrder: 92,
+    groupKey: "care_home_pathway",
+    groupLabel: "Home care & companionship",
+    groupSort: 88,
+    requiresFamilyApproval: true,
+    nhsHomePathway: true,
+    checklist: [
+      ...baseIdentity,
+      { type: "PROOF_OF_ADDRESS", label: "Proof of address", required: true },
+      {
+        type: "DBS",
+        label: "Enhanced DBS (recommended / often required for formal PHB roles)",
+        required: false,
+      },
+      {
+        type: "SAFEGUARDING",
+        label: "Safeguarding awareness evidence",
+        required: true,
+      },
+    ],
+  },
+  {
+    slug: "complex-home-care",
+    name: "Complex care at home (NHS home pathway)",
+    phase: "CARE",
+    riskLevel: "CRITICAL",
+    mode: "ACTIVE",
+    description:
+      "Coordination of complex care in the person's home (NHS home-first / personal health budget context). Platform connects families and carers; family security approval required. Not an NHS service and not CQC-registered.",
+    sortOrder: 93,
+    groupKey: "care_home_pathway",
+    groupLabel: "Home care & companionship",
+    groupSort: 88,
+    requiresFamilyApproval: true,
+    nhsHomePathway: true,
+    checklist: [
+      ...careBase,
+      {
+        type: "CERTIFICATE",
+        label: "Complex care / specialist training evidence",
+        required: true,
+      },
+      {
+        type: "MEDICATION",
+        label: "Medication training (if delegated tasks apply)",
+        required: false,
+        notes: "No clinical prescribing product — evidence only",
+      },
+    ],
+  },
   {
     slug: "home-care",
-    name: "Home Care",
+    name: "Home Care (agency pathway)",
     phase: "CARE",
     riskLevel: "CRITICAL",
     mode: "WAITLIST",
     description:
-      "Non-clinical home care coordination scaffold. Not a CQC-registered care agency product.",
-    sortOrder: 90,
+      "Traditional domiciliary care interest list. Prefer family-approved home pathway roles where active. Not a CQC-registered care agency product.",
+    sortOrder: 94,
     groupKey: "care",
-    groupLabel: "Care",
+    groupLabel: "Care (agency waitlist)",
     groupSort: 90,
-    checklist: [
-      ...baseIdentity,
-      { type: "PROOF_OF_ADDRESS", label: "Proof of address", required: true },
-      { type: "DBS", label: "Enhanced DBS", required: true },
-      { type: "SAFEGUARDING", label: "Safeguarding training evidence", required: true },
-      { type: "INSURANCE", label: "Appropriate care insurance", required: true },
-    ],
+    requiresFamilyApproval: true,
+    nhsHomePathway: false,
+    checklist: [...careBase],
   },
   {
     slug: "live-in-care",
@@ -537,17 +642,12 @@ export const CATEGORY_SEEDS: CategorySeed[] = [
     riskLevel: "CRITICAL",
     mode: "WAITLIST",
     description: "Live-in care scaffold with elevated safeguarding expectations.",
-    sortOrder: 91,
+    sortOrder: 95,
     groupKey: "care",
-    groupLabel: "Care",
+    groupLabel: "Care (agency waitlist)",
     groupSort: 90,
-    checklist: [
-      ...baseIdentity,
-      { type: "PROOF_OF_ADDRESS", label: "Proof of address", required: true },
-      { type: "DBS", label: "Enhanced DBS", required: true },
-      { type: "SAFEGUARDING", label: "Safeguarding training evidence", required: true },
-      { type: "INSURANCE", label: "Appropriate care insurance", required: true },
-    ],
+    requiresFamilyApproval: true,
+    checklist: [...careBase],
   },
   {
     slug: "specialist-carer",
@@ -555,18 +655,15 @@ export const CATEGORY_SEEDS: CategorySeed[] = [
     phase: "CARE",
     riskLevel: "CRITICAL",
     mode: "WAITLIST",
-    description: "Specialist carer interest list — compliance tooling required before go-live.",
-    sortOrder: 92,
+    description: "Specialist carer interest list — deep clinical pathways remain partner-led.",
+    sortOrder: 96,
     groupKey: "care",
-    groupLabel: "Care",
+    groupLabel: "Care (agency waitlist)",
     groupSort: 90,
+    requiresFamilyApproval: true,
     checklist: [
-      ...baseIdentity,
-      { type: "PROOF_OF_ADDRESS", label: "Proof of address", required: true },
-      { type: "DBS", label: "Enhanced DBS", required: true },
-      { type: "SAFEGUARDING", label: "Safeguarding training evidence", required: true },
+      ...careBase,
       { type: "CERTIFICATE", label: "Specialist qualification evidence", required: true },
-      { type: "INSURANCE", label: "Appropriate care insurance", required: true },
     ],
   },
 ];

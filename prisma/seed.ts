@@ -43,6 +43,8 @@ async function main() {
         groupKey: c.groupKey,
         groupLabel: c.groupLabel,
         groupSort: c.groupSort,
+        requiresFamilyApproval: c.requiresFamilyApproval ?? false,
+        nhsHomePathway: c.nhsHomePathway ?? false,
       },
       create: {
         slug: c.slug,
@@ -56,6 +58,8 @@ async function main() {
         groupKey: c.groupKey,
         groupLabel: c.groupLabel,
         groupSort: c.groupSort,
+        requiresFamilyApproval: c.requiresFamilyApproval ?? false,
+        nhsHomePathway: c.nhsHomePathway ?? false,
       },
     });
   }
@@ -284,6 +288,16 @@ async function main() {
   await ensureCategory(driver.id, "chauffeur", "VERIFIED", "T2");
   await ensureCategory(stylist.id, "stylist", "IN_REVIEW", "T1");
   await ensureCategory(security.id, "concierge-security", "WAITLIST", "T1");
+  // Care pathway demo — dual-control already satisfied via seed CLEAR reviews below
+  if (bySlug["companionship"]) {
+    await ensureCategory(pa.id, "companionship", "VERIFIED", "T2");
+  }
+  if (bySlug["learning-disability-support"]) {
+    await ensureCategory(pa.id, "learning-disability-support", "VERIFIED", "T2");
+  }
+  if (bySlug["complex-home-care"]) {
+    await ensureCategory(pa.id, "complex-home-care", "VERIFIED", "T2");
+  }
 
   async function addCred(
     providerId: string,
@@ -377,6 +391,50 @@ async function main() {
       checklistSnapshotJson: JSON.stringify({ complete: true }),
       aiSignalsJson: JSON.stringify({ riskScore: 28 }),
       createdAt: new Date(Date.now() - 2.5 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // Care household demo for VIP client + family-approved carer
+  await db.carerApproval.deleteMany({});
+  await db.careCircleMember.deleteMany({});
+  await db.careHousehold.deleteMany({ where: { ownerClientId: client.id } });
+  const careHome = await db.careHousehold.create({
+    data: {
+      ownerClientId: client.id,
+      label: "Family home",
+      recipientName: "Eleanor Morgan",
+      city: "London",
+      needsSummary: "Companionship and LD-friendly support at home",
+      needsTagsJson: JSON.stringify([
+        "companionship",
+        "learning_disability",
+        "complex",
+      ]),
+      members: {
+        create: [
+          {
+            name: "Eleanor Morgan",
+            role: "RECIPIENT",
+            canApprove: false,
+          },
+          {
+            name: "Alex Morgan",
+            email: "client@aegis.demo",
+            role: "FAMILY",
+            canApprove: true,
+          },
+        ],
+      },
+    },
+  });
+  await db.carerApproval.create({
+    data: {
+      householdId: careHome.id,
+      providerId: pa.id,
+      status: "APPROVED",
+      approvedByUserId: clientUser.id,
+      rationale: "Known and trusted; dual-control cleared for companionship.",
+      decidedAt: new Date(),
     },
   });
 

@@ -283,6 +283,17 @@ export async function createServiceRequest(formData: FormData) {
     throw new Error("Invalid request");
   }
 
+  const careHouseholdId = String(formData.get("careHouseholdId") ?? "") || null;
+  if (category.requiresFamilyApproval && !careHouseholdId) {
+    throw new Error("Care household required for this category");
+  }
+  if (careHouseholdId) {
+    const hh = await db.careHousehold.findFirst({
+      where: { id: careHouseholdId, ownerClientId: client.id },
+    });
+    if (!hh) throw new Error("Invalid care household");
+  }
+
   const { getEnv } = await import("@/config/env");
   const { resolveDefaultTenantId } = await import("@/lib/tenancy");
   const tenantId = await resolveDefaultTenantId(user.id);
@@ -303,6 +314,7 @@ export async function createServiceRequest(formData: FormData) {
       budgetBand: String(formData.get("budgetBand") ?? "PREMIUM") || "PREMIUM",
       jurisdiction: getEnv().JURISDICTION_DEFAULT,
       tenantId,
+      careHouseholdId,
     },
   });
 
@@ -312,6 +324,9 @@ export async function createServiceRequest(formData: FormData) {
     include: {
       user: true,
       categories: { include: { category: true } },
+      carerApprovals: careHouseholdId
+        ? { where: { householdId: careHouseholdId, status: "APPROVED" } }
+        : false,
       bookings: {
         where: { clientId: client.id, status: "COMPLETED" },
         select: { id: true },
@@ -322,6 +337,13 @@ export async function createServiceRequest(formData: FormData) {
   const candidates = providers.flatMap((p) =>
     p.categories
       .filter((c) => c.categoryId === categoryId)
+      .filter(() => {
+        // Family-approved pathway: only approved carers match for booking readiness
+        // Unapproved can still be shortlisted via request approval UI
+        if (!category.requiresFamilyApproval) return true;
+        // Include all VERIFIED for visibility; contract gate enforces approval
+        return true;
+      })
       .map((c) => ({
         providerId: p.id,
         name: p.user.name,
@@ -422,6 +444,25 @@ export async function createAndSignContracts(formData: FormData) {
     include: { user: true },
   });
   if (!provider) throw new Error("Provider not found");
+
+  // Family/recipient security gate for care pathway
+  if (req.category.requiresFamilyApproval) {
+    if (!req.careHouseholdId) {
+      throw new Error("Care household required before engagement");
+    }
+    const { isCarerApprovedForHousehold } = await import(
+      "@/lib/services/care-service"
+    );
+    const ok = await isCarerApprovedForHousehold(
+      req.careHouseholdId,
+      providerId,
+    );
+    if (!ok) {
+      throw new Error(
+        "Family/recipient must approve this carer for the household before booking",
+      );
+    }
+  }
 
   const vars = {
     clientName: req.client.user.name,
@@ -769,6 +810,115 @@ export async function joinRobotWaitlist() {
   revalidatePath("/verticals/robots");
   revalidatePath("/provider");
   revalidatePath("/provider/categories");
+}
+
+export async function createCareHouseholdAction(formData: FormData) {
+  const user = await requireUser(["CLIENT"]);
+  const client = await db.clientProfile.findUnique({ where: { userId: user.id } });
+  if (!client) throw new Error("No client profile");
+
+  const recipientName = String(formData.get("recipientName") ?? "").trim();
+  if (!recipientName) throw new Error("Recipient name required");
+
+  const tags = String(formData.get("needsTags") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const { createCareHousehold } = await import("@/lib/services/care-service");
+  await createCareHousehold({
+    ownerClientId: client.id,
+    recipientName,
+    label: String(formData.get("label") ?? "Home") || "Home",
+    city: String(formData.get("city") ?? "London") || "London",
+    needsSummary: String(formData.get("needsSummary") ?? "") || undefined,
+    needsTags: tags,
+    notes: String(formData.get("notes") ?? "") || undefined,
+    actorUserId: user.id,
+  });
+
+  revalidatePath("/client/care");
+  redirect("/client/care");
+}
+
+export async function addCareCircleMemberAction(formData: FormData) {
+  const user = await requireUser(["CLIENT"]);
+  const client = await db.clientProfile.findUnique({ where: { userId: user.id } });
+  if (!client) throw new Error("No client profile");
+
+  const householdId = String(formData.get("householdId") ?? "");
+  const hh = await db.careHousehold.findFirst({
+    where: { id: householdId, ownerClientId: client.id },
+  });
+  if (!hh) throw new Error("Household not found");
+
+  const { addCareCircleMember } = await import("@/lib/services/care-service");
+  await addCareCircleMember({
+    householdId,
+    name: String(formData.get("name") ?? "").trim(),
+    email: String(formData.get("email") ?? "") || undefined,
+    role: (String(formData.get("role") ?? "FAMILY") || "FAMILY") as
+      | "FAMILY"
+      | "ADVOCATE"
+      | "NEXT_OF_KIN"
+      | "RECIPIENT",
+    canApprove: String(formData.get("canApprove") ?? "true") === "true",
+    actorUserId: user.id,
+  });
+
+  revalidatePath("/client/care");
+}
+
+export async function requestCarerApprovalAction(formData: FormData) {
+  const user = await requireUser(["CLIENT"]);
+  const client = await db.clientProfile.findUnique({ where: { userId: user.id } });
+  if (!client) throw new Error("No client profile");
+
+  const householdId = String(formData.get("householdId") ?? "");
+  const providerId = String(formData.get("providerId") ?? "");
+  const hh = await db.careHousehold.findFirst({
+    where: { id: householdId, ownerClientId: client.id },
+  });
+  if (!hh) throw new Error("Household not found");
+
+  const { requestCarerApproval } = await import("@/lib/services/care-service");
+  await requestCarerApproval({
+    householdId,
+    providerId,
+    actorUserId: user.id,
+  });
+
+  revalidatePath("/client/care");
+  revalidatePath(`/client/requests`);
+}
+
+export async function decideCarerApprovalAction(formData: FormData) {
+  const user = await requireUser(["CLIENT"]);
+  const client = await db.clientProfile.findUnique({ where: { userId: user.id } });
+  if (!client) throw new Error("No client profile");
+
+  const approvalId = String(formData.get("approvalId") ?? "");
+  const decision = String(formData.get("decision") ?? "") as
+    | "APPROVED"
+    | "DECLINED"
+    | "REVOKED";
+  const approval = await db.carerApproval.findUnique({
+    where: { id: approvalId },
+    include: { household: true },
+  });
+  if (!approval || approval.household.ownerClientId !== client.id) {
+    throw new Error("Forbidden");
+  }
+
+  const { decideCarerApproval } = await import("@/lib/services/care-service");
+  await decideCarerApproval({
+    approvalId,
+    decision,
+    actorUserId: user.id,
+    rationale: String(formData.get("rationale") ?? "") || undefined,
+  });
+
+  revalidatePath("/client/care");
 }
 
 export async function scheduleVerificationInterview(formData: FormData) {

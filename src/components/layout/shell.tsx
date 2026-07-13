@@ -15,7 +15,10 @@ export async function SiteHeader() {
           { href: "/provider/verify", label: "Identity" },
         ]
       : role === "CLIENT"
-        ? [{ href: "/client", label: "Client" }]
+        ? [
+            { href: "/client", label: "Client" },
+            { href: "/client/care", label: "Care circle" },
+          ]
         : role === "OPS"
           ? [{ href: "/ops", label: "Trust & Safety" }]
           : role === "ADMIN"

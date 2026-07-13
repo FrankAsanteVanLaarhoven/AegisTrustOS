@@ -8,16 +8,31 @@ import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-export default async function NewRequestPage() {
+export default async function NewRequestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ household?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (session.user.role !== "CLIENT") redirect("/");
+  const sp = await searchParams;
+
+  const client = await db.clientProfile.findUnique({
+    where: { userId: session.user.id },
+  });
+  if (!client) redirect("/client");
 
   const categories = await db.category.findMany({
     where: { mode: "ACTIVE" },
     orderBy: [{ groupSort: "asc" }, { sortOrder: "asc" }],
   });
   const groups = groupCategories(categories);
+
+  const households = await db.careHousehold.findMany({
+    where: { ownerClientId: client.id },
+    orderBy: { createdAt: "desc" },
+  });
 
   const defaultStart = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
   const local = new Date(
@@ -31,7 +46,7 @@ export default async function NewRequestPage() {
       <Card>
         <CardHeader
           title="New service request"
-          subtitle="London pilot · grouped active categories"
+          subtitle="Care pathway roles require a household and family carer approval before booking"
         />
         <CardBody>
           <form action={createServiceRequest} className="space-y-4">
@@ -47,18 +62,48 @@ export default async function NewRequestPage() {
                     {g.items.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
+                        {c.requiresFamilyApproval ? " · family approval" : ""}
+                        {c.nhsHomePathway ? " · home pathway" : ""}
                       </option>
                     ))}
                   </optgroup>
                 ))}
               </select>
             </label>
+
+            <label className="block text-sm">
+              <span className="text-zinc-500">
+                Care household (required for home care / companionship / LD)
+              </span>
+              <select
+                name="careHouseholdId"
+                className="mt-1 w-full rounded-xl border border-white/10 bg-[#141a22] px-3 py-2 text-sm"
+                defaultValue={sp.household ?? ""}
+              >
+                <option value="">— Not a care household request —</option>
+                {households.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {h.recipientName} · {h.label}
+                  </option>
+                ))}
+              </select>
+              {!households.length ? (
+                <p className="mt-1 text-xs text-zinc-600">
+                  Create a household in{" "}
+                  <a href="/client/care" className="text-[#3dd6c6] underline">
+                    Care circle
+                  </a>{" "}
+                  first.
+                </p>
+              ) : null}
+            </label>
+
             <label className="block text-sm">
               <span className="text-zinc-500">Title</span>
               <input
                 name="title"
                 required
-                placeholder="e.g. Weekly clean + grocery run"
+                placeholder="e.g. Weekday companionship visits"
                 className="mt-1 w-full rounded-xl border border-white/10 bg-[#141a22] px-3 py-2 text-sm"
               />
             </label>
@@ -104,7 +149,7 @@ export default async function NewRequestPage() {
                 <span className="text-zinc-500">Min trust tier</span>
                 <select
                   name="minTrustTier"
-                  defaultValue="T1"
+                  defaultValue="T2"
                   className="mt-1 w-full rounded-xl border border-white/10 bg-[#141a22] px-3 py-2 text-sm"
                 >
                   <option value="T1">T1</option>
@@ -129,7 +174,7 @@ export default async function NewRequestPage() {
               <span className="text-zinc-500">Skills (comma-separated)</span>
               <input
                 name="skills"
-                placeholder="discretion, punctual"
+                placeholder="companionship, LD support, discretion"
                 className="mt-1 w-full rounded-xl border border-white/10 bg-[#141a22] px-3 py-2 text-sm"
               />
             </label>

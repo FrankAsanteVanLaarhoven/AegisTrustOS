@@ -50,8 +50,11 @@ export default async function ClientDashboard() {
             {client.organisation ? ` · ${client.organisation}` : ""} · {client.city}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone="gold">{client.clientRiskTier}</Badge>
+          <Link href="/client/care" className={buttonClass("secondary", "sm")}>
+            Care circle
+          </Link>
           <Link href="/client/requests/new" className={buttonClass("primary", "sm")}>
             New service request
           </Link>

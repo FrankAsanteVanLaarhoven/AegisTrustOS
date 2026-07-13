@@ -123,9 +123,32 @@ export const OFFICIAL_LINKS: OfficialLink[] = [
     code: "CQC_CONTEXT",
     title: "CQC (care settings context)",
     description:
-      "Care Quality Commission — context only. Aegis robot care-home roles are not a CQC registration product.",
+      "Care Quality Commission — context only. Aegis is not a CQC-registered care agency.",
     url: "https://www.cqc.org.uk/",
     credentialTypes: ["POLICY_CLEARANCE", "SAFEGUARDING"],
+  },
+  {
+    code: "NHS_HOME_CARE",
+    title: "NHS continuing healthcare / care at home (context)",
+    description:
+      "NHS information on care outside hospital. Aegis is not an NHS service; supports family-led home arrangements.",
+    url: "https://www.nhs.uk/conditions/social-care-and-support-guide/",
+    credentialTypes: ["SAFEGUARDING", "CERTIFICATE"],
+  },
+  {
+    code: "PHB",
+    title: "Personal health budgets (NHS)",
+    description:
+      "Guidance on personal health budgets — families may commission support; platform facilitates matching and approvals only.",
+    url: "https://www.nhs.uk/nhs-services/help-with-health-costs/what-is-a-personal-health-budget/",
+    credentialTypes: ["CERTIFICATE", "SAFEGUARDING"],
+  },
+  {
+    code: "SKILLS_FOR_CARE",
+    title: "Skills for Care",
+    description: "Workforce and training resources for adult social care.",
+    url: "https://www.skillsforcare.org.uk/",
+    credentialTypes: ["SAFEGUARDING", "CERTIFICATE"],
   },
 ];
 

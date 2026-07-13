@@ -1,9 +1,11 @@
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import {
   shortlistMatch,
   createAndSignContracts,
+  requestCarerApprovalAction,
 } from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
@@ -26,9 +28,18 @@ export default async function RequestDetailPage({
     include: {
       client: true,
       category: true,
+      careHousehold: true,
       matches: {
         orderBy: { score: "desc" },
-        include: { provider: { include: { user: true } } },
+        include: {
+          provider: {
+            include: {
+              user: true,
+              passport: true,
+              carerApprovals: true,
+            },
+          },
+        },
       },
       contracts: true,
       bookings: true,
@@ -50,23 +61,53 @@ export default async function RequestDetailPage({
           <Badge tone="navy">{req.status}</Badge>
           <Badge tone="muted">{req.category.name}</Badge>
           <Badge tone="gold">Min {req.minTrustTier}</Badge>
+          {req.category.requiresFamilyApproval ? (
+            <Badge tone="warn">family approval required</Badge>
+          ) : null}
+          {req.category.nhsHomePathway ? (
+            <Badge tone="gold">NHS home pathway context</Badge>
+          ) : null}
         </div>
         <h1 className="mt-3 text-2xl font-semibold text-zinc-100">{req.title}</h1>
         <p className="mt-1 text-sm text-zinc-500">
           {req.location}
           {req.area ? ` · ${req.area}` : ""} · {formatDate(req.startAt)}
+          {req.careHousehold
+            ? ` · Household: ${req.careHousehold.recipientName}`
+            : ""}
         </p>
         <p className="mt-4 text-zinc-300 leading-relaxed">{req.brief}</p>
       </div>
 
+      {req.category.requiresFamilyApproval ? (
+        <p className="rounded-lg border border-[#e87722]/25 bg-[rgba(232,119,34,0.06)] px-4 py-3 text-xs text-zinc-400">
+          Security is approved by the family/recipient for this household. Approve
+          a carer in{" "}
+          <Link href="/client/care" className="text-[#3dd6c6] underline">
+            Care circle
+          </Link>{" "}
+          before “Sign NDA + engage”. Dual-control Trust &amp; Safety clearance
+          still applies.
+        </p>
+      ) : null}
+
       <Card>
         <CardHeader
           title="Explainable shortlist"
-          subtitle="Hard filters (verified, tier, geo) + soft rank with reasons. Not a black box."
+          subtitle="Verified carers with match reasons. Family approval is a separate security gate."
         />
         <CardBody className="space-y-4">
           {req.matches.map((m) => {
             const reasons = parseJsonArray(m.reasonsJson);
+            const approval = req.careHouseholdId
+              ? m.provider.carerApprovals.find(
+                  (a) => a.householdId === req.careHouseholdId,
+                )
+              : null;
+            const familyOk = !req.category.requiresFamilyApproval
+              ? true
+              : approval?.status === "APPROVED";
+
             return (
               <div
                 key={m.id}
@@ -80,11 +121,29 @@ export default async function RequestDetailPage({
                     <p className="text-xs text-zinc-500">
                       Score {m.score} · Advisory risk {m.provider.riskScore}/100 ·{" "}
                       {m.provider.city}
+                      {m.provider.passport
+                        ? ` · ${m.provider.passport.passportNumber}`
+                        : ""}
                     </p>
                   </div>
-                  <Badge tone={m.status === "ACCEPTED" ? "success" : "muted"}>
-                    {m.status}
-                  </Badge>
+                  <div className="flex flex-wrap gap-1">
+                    <Badge tone={m.status === "ACCEPTED" ? "success" : "muted"}>
+                      {m.status}
+                    </Badge>
+                    {req.category.requiresFamilyApproval ? (
+                      <Badge
+                        tone={
+                          approval?.status === "APPROVED"
+                            ? "success"
+                            : approval?.status === "PENDING"
+                              ? "warn"
+                              : "danger"
+                        }
+                      >
+                        family: {approval?.status ?? "NOT_REQUESTED"}
+                      </Badge>
+                    ) : null}
+                  </div>
                 </div>
                 <ul className="mt-2 list-disc pl-5 text-xs text-zinc-400">
                   {reasons.map((r) => (
@@ -101,10 +160,38 @@ export default async function RequestDetailPage({
                         Shortlist
                       </button>
                     </form>
+                    {req.category.requiresFamilyApproval &&
+                    req.careHouseholdId &&
+                    approval?.status !== "APPROVED" ? (
+                      <form action={requestCarerApprovalAction}>
+                        <input
+                          type="hidden"
+                          name="householdId"
+                          value={req.careHouseholdId}
+                        />
+                        <input
+                          type="hidden"
+                          name="providerId"
+                          value={m.providerId}
+                        />
+                        <button type="submit" className={buttonClass("secondary", "sm")}>
+                          Request family approval
+                        </button>
+                      </form>
+                    ) : null}
                     <form action={createAndSignContracts}>
                       <input type="hidden" name="requestId" value={req.id} />
                       <input type="hidden" name="providerId" value={m.providerId} />
-                      <button type="submit" className={buttonClass("primary", "sm")}>
+                      <button
+                        type="submit"
+                        className={buttonClass("primary", "sm")}
+                        disabled={!familyOk}
+                        title={
+                          familyOk
+                            ? undefined
+                            : "Approve carer in Care circle first"
+                        }
+                      >
                         Sign NDA + engage
                       </button>
                     </form>
@@ -115,7 +202,8 @@ export default async function RequestDetailPage({
           })}
           {!req.matches.length ? (
             <p className="text-sm text-zinc-500">
-              No verified providers matched. Ops can place manually later.
+              No verified providers matched. Clear carers via ops, then request
+              family approval.
             </p>
           ) : null}
         </CardBody>

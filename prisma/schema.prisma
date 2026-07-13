@@ -240,6 +240,7 @@ model ProviderProfile {
   incidents       Incident[]       @relation("ProviderIncidents")
   passport        AegisPassport?
   interviews      VerificationInterview[]
+  carerApprovals  CarerApproval[]
 }
 
 model ClientProfile {
@@ -253,10 +254,11 @@ model ClientProfile {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  requests  ServiceRequest[]
-  contracts Contract[]       @relation("ClientContracts")
-  bookings  Booking[]        @relation("ClientBookings")
-  incidents Incident[]       @relation("ClientIncidents")
+  requests     ServiceRequest[]
+  contracts    Contract[]       @relation("ClientContracts")
+  bookings     Booking[]        @relation("ClientBookings")
+  incidents    Incident[]       @relation("ClientIncidents")
+  careHouseholds CareHousehold[]
 }
 
 model Category {
@@ -272,12 +274,80 @@ model Category {
   groupKey    String        @default("executive")
   groupLabel  String        @default("Executive & lifestyle")
   groupSort   Int           @default(10)
+  /// Family/recipient must approve carer before booking
+  requiresFamilyApproval Boolean @default(false)
+  /// Framed for NHS home / PHB / complex care at home pathways (not NHS-operated)
+  nhsHomePathway Boolean    @default(false)
   createdAt   DateTime      @default(now())
 
   providerCategories ProviderCategory[]
   requests           ServiceRequest[]
 
   @@index([groupKey, groupSort, sortOrder])
+}
+
+enum CareCircleRole {
+  RECIPIENT
+  FAMILY
+  ADVOCATE
+  NEXT_OF_KIN
+}
+
+enum CarerApprovalStatus {
+  PENDING
+  APPROVED
+  REVOKED
+  DECLINED
+}
+
+/// Care recipient household — owned by a family/client account
+model CareHousehold {
+  id             String   @id @default(cuid())
+  ownerClientId  String
+  owner          ClientProfile @relation(fields: [ownerClientId], references: [id], onDelete: Cascade)
+  label          String   @default("Home")
+  recipientName  String
+  city           String   @default("London")
+  needsSummary   String?
+  /// learning_disability | complex | companionship | mixed
+  needsTagsJson  String   @default("[]")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  members    CareCircleMember[]
+  approvals  CarerApproval[]
+  requests   ServiceRequest[]
+}
+
+model CareCircleMember {
+  id          String        @id @default(cuid())
+  householdId String
+  household   CareHousehold @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  name        String
+  email       String?
+  role        CareCircleRole @default(FAMILY)
+  /// Can approve carers on behalf of recipient
+  canApprove  Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+}
+
+/// Recipient/family security approval of a specific carer for this household
+model CarerApproval {
+  id              String              @id @default(cuid())
+  householdId     String
+  household       CareHousehold       @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  providerId      String
+  provider        ProviderProfile     @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  status          CarerApprovalStatus @default(PENDING)
+  approvedByUserId String?
+  rationale       String?
+  decidedAt       DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@unique([householdId, providerId])
+  @@index([providerId, status])
 }
 
 model ProviderCategory {
@@ -352,6 +422,8 @@ model ServiceRequest {
   /// Forward-compat multi-tenant: partner org scope (nullable = direct platform)
   tenantId         String?
   jurisdiction     String        @default("UK")
+  careHouseholdId  String?
+  careHousehold    CareHousehold? @relation(fields: [careHouseholdId], references: [id], onDelete: SetNull)
   title            String
   brief            String
   location         String        @default("London")
@@ -373,6 +445,7 @@ model ServiceRequest {
 
   @@index([tenantId])
   @@index([jurisdiction])
+  @@index([careHouseholdId])
 }
 
 model Match {

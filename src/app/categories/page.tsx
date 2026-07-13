@@ -43,6 +43,15 @@ export default async function CategoriesPage() {
                         {c.mode}
                       </Badge>
                       <Badge tone="muted">{c.riskLevel}</Badge>
+                      {"requiresFamilyApproval" in c &&
+                      (c as { requiresFamilyApproval?: boolean })
+                        .requiresFamilyApproval ? (
+                        <Badge tone="warn">family approval</Badge>
+                      ) : null}
+                      {"nhsHomePathway" in c &&
+                      (c as { nhsHomePathway?: boolean }).nhsHomePathway ? (
+                        <Badge tone="gold">home pathway</Badge>
+                      ) : null}
                     </div>
                     <h3 className="text-lg font-semibold text-zinc-100">{c.name}</h3>
                     <p className="text-sm text-zinc-400 leading-relaxed">
