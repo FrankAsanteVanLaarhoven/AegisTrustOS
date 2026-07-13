@@ -14,9 +14,13 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_OUTPUT=standalone
-ENV DATABASE_URL="file:./ci-build.db"
-# Generate client + build (SQLite placeholder for build-time prisma)
-RUN npx prisma generate \
+# Image targets Postgres runtime (compose / ECS / K8s)
+ENV PRISMA_PROVIDER=postgresql
+# Dummy URL only for generate/build (no live DB at image build)
+ENV DATABASE_URL="postgresql://aegis:aegis@127.0.0.1:5432/aegis"
+ENV SKIP_DB_PUSH=1
+RUN node scripts/set-prisma-provider.mjs postgresql \
+  && npx prisma generate \
   && npm run build
 
 FROM node:22-alpine AS runner

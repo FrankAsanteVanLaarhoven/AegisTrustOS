@@ -75,17 +75,39 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Post-deploy readiness
+      - name: Post-deploy readiness + metrics
         if: steps.gate.outputs.skip != 'true' && steps.deploy.outputs.url != ''
         run: |
           BASE="${{ steps.deploy.outputs.url }}"
           for i in $(seq 1 30); do
             if curl -sf "$BASE/api/v1/ready" >/dev/null; then
               echo "Ready: $BASE"
-              curl -sf "$BASE/api/v1/health" | head -c 300
+              echo "--- health ---"
+              curl -sf "$BASE/api/v1/health" | head -c 400
+              echo
+              echo "--- metrics head ---"
+              curl -sf "$BASE/api/v1/metrics" | head -15
+              echo
+              echo "--- version ---"
+              curl -sf "$BASE/api/v1/version" | head -c 400
+              echo
               exit 0
             fi
             sleep 5
           done
           echo "Readiness failed for $BASE"
           exit 1
+
+      - name: Optional seed (manual preview only)
+        if: steps.gate.outputs.skip != 'true' && github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'preview'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::DATABASE_URL not set — skip seed"
+            exit 0
+          fi
+          npm ci
+          node scripts/set-prisma-provider.mjs postgresql
+          npx prisma generate
+          npm run db:seed || echo "seed failed (may already exist)"

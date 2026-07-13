@@ -88,13 +88,15 @@ AWS_REGION=eu-west-2
 
 ## Path A — Vercel (pilot default)
 
+**Step-by-step:** [VERCEL_SETUP.md](./VERCEL_SETUP.md)
+
 1. Create Vercel project from GitHub repo  
 2. Set Postgres `DATABASE_URL` (Neon/Supabase/RDS)  
-3. Switch Prisma `provider = "postgresql"` for that deploy (or use `prisma/schema.prisma` prod branch)  
-4. Set secrets above → push to `main` → `CD · Vercel` runs  
+3. Build uses `npm run build:deploy` → auto-sets Prisma **postgresql** + `db push`  
+4. Set GitHub secrets → push to `main` → `CD · Vercel` runs  
 5. Set `CRON_SECRET` in Vercel + GitHub for scheduled expiry  
 
-`vercel.json` includes hourly cron hit to `/api/v1/ops/expiry`.
+`vercel.json` includes hourly cron hit to `/api/v1/ops/expiry` (authorize with `CRON_SECRET`).
 
 ---
 

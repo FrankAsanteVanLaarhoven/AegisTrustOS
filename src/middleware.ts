@@ -41,6 +41,19 @@ async function limit(
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Cron / webhooks: skip session gate (route handlers verify secrets)
+  if (
+    pathname === "/api/v1/ops/expiry" ||
+    pathname.startsWith("/api/v1/idv/webhook") ||
+    pathname.startsWith("/api/v1/payments/webhook") ||
+    pathname === "/api/v1/health" ||
+    pathname === "/api/v1/ready" ||
+    pathname === "/api/v1/metrics"
+  ) {
+    const res = NextResponse.next();
+    return applySecurityHeaders(res);
+  }
+
   if (
     pathname.startsWith("/api/auth") ||
     pathname === "/login" ||

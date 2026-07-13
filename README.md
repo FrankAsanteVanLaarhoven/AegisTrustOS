@@ -118,7 +118,8 @@ Palantir-grade ops aesthetic + stealth controls: hardened headers, rate-limited 
 | `CD · Kubernetes` | manual | apply manifests |
 | `CD · Scheduled jobs` | cron | expiry + outbox drain |
 
-Deploy guide: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md). Infra: `deploy/terraform`, `deploy/k8s`, `Dockerfile`, `vercel.json`.
+Deploy guide: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) · **Vercel 15‑min setup:** [docs/VERCEL_SETUP.md](./docs/VERCEL_SETUP.md).  
+Infra: `deploy/terraform`, `deploy/k8s`, `Dockerfile`, `vercel.json` (`build:deploy` auto-Postgres).
 
 Adapters: encrypted storage (local/S3), notify (file/webhook/Postmark/SES), payments (stub/Stripe Connect), IDV (MOCK/Trulioo/Socure).  
 See [docs/PRODUCTION_PATH.md](./docs/PRODUCTION_PATH.md), [docs/FUTURE_PROOF.md](./docs/FUTURE_PROOF.md).
