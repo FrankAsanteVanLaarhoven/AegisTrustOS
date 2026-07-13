@@ -52,12 +52,26 @@ export default async function PilotPage({
             subtitle="Demand · supply · agency white-label"
           />
           <CardBody>
-            {sp.error ? (
+            {sp.error === "rate" ? (
+              <p className="mb-3 text-sm text-amber-400">
+                Too many submissions from this address. Try again later.
+              </p>
+            ) : sp.error ? (
               <p className="mb-3 text-sm text-red-400">
                 Please provide a valid name and email.
               </p>
             ) : null}
-            <form action={submitPilotInterest} className="grid gap-3 sm:grid-cols-2">
+            <form
+              action={submitPilotInterest}
+              className="relative grid gap-3 sm:grid-cols-2"
+            >
+              {/* Honeypot — leave empty */}
+              <div className="absolute -left-[9999px] opacity-0" aria-hidden>
+                <label>
+                  Website
+                  <input name="website" tabIndex={-1} autoComplete="off" />
+                </label>
+              </div>
               <label className="block text-sm sm:col-span-1">
                 <span className="text-zinc-400">Name</span>
                 <input

@@ -1126,6 +1126,12 @@ export async function completeInterview(formData: FormData) {
 
 /** Public London pilot interest (no auth). */
 export async function submitPilotInterest(formData: FormData) {
+  // Honeypot — bots fill hidden fields
+  const honeypot = String(formData.get("website") ?? "").trim();
+  if (honeypot) {
+    redirect("/pilot?ok=1");
+  }
+
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").toLowerCase().trim();
   const organisation = String(formData.get("organisation") ?? "").trim();
@@ -1140,6 +1146,17 @@ export async function submitPilotInterest(formData: FormData) {
 
   if (!name || !email.includes("@")) {
     redirect("/pilot?error=invalid");
+  }
+
+  // Soft rate limit: 5 submissions per email per hour
+  const { rateLimit } = await import("@/lib/security");
+  const rl = rateLimit({
+    key: `pilot:${email}`,
+    limit: 5,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rl.ok) {
+    redirect("/pilot?error=rate");
   }
 
   const { createPublicInterest } = await import("@/lib/services/pilot-service");
@@ -1184,9 +1201,11 @@ export async function submitPilotInterest(formData: FormData) {
   });
 
   try {
+    const { getEnv } = await import("@/config/env");
     const { notifyUser } = await import("@/lib/services/notify-service");
+    const opsEmail = getEnv().PILOT_NOTIFY_EMAIL ?? "ops@aegis.demo";
     await notifyUser({
-      email: "ops@aegis.demo",
+      email: opsEmail,
       subject: `Pilot interest: ${name}`,
       body: [
         `${name} <${email}> registered pilot interest.`,

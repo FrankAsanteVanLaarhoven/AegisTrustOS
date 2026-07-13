@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
     "export:audit": "tsx scripts/export-audit.ts",
+    "export:pilot": "tsx scripts/export-pilot.ts",
     "job:expiry": "tsx scripts/expiry-sweep.ts",
     "job:drain-outbox": "tsx scripts/drain-outbox.ts",
     "postinstall": "prisma generate"

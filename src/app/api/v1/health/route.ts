@@ -27,6 +27,13 @@ export async function GET() {
     storage: env.STORAGE_BACKEND,
     notify: env.NOTIFY_BACKEND,
     payments: env.PAYMENTS_BACKEND,
+    platformFeeBps: env.PLATFORM_FEE_BPS,
+    readiness: {
+      idvWebhookSecret: Boolean(env.IDV_WEBHOOK_SECRET) || env.IDV_VENDOR === "MOCK",
+      stripeWebhookSecret:
+        env.PAYMENTS_BACKEND !== "stripe" || Boolean(env.STRIPE_WEBHOOK_SECRET),
+      authSecret: Boolean(env.AUTH_SECRET && env.AUTH_SECRET.length >= 16),
+    },
     features: getFeatures(),
     timestamp: new Date().toISOString(),
   };

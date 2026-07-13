@@ -13,6 +13,17 @@ export async function GET() {
       "human_clearance_required_for_verified",
       "ai_advisory_only",
       "hybrid_idv_adapter",
+      "dual_control_critical_categories",
+      "encrypted_evidence_at_rest",
+      "webhook_auth_required_in_production",
     ],
+    surfaces: {
+      idvWebhook: "/api/v1/idv/webhook",
+      paymentsWebhook: "/api/v1/payments/webhook",
+      pilotExport: "/api/v1/ops/pilot/export",
+      pilotPublic: "/pilot",
+      legalTerms: "/legal/terms",
+      legalPrivacy: "/legal/privacy",
+    },
   });
 }

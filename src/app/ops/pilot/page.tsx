@@ -99,6 +99,12 @@ export default async function OpsPilotPage({
           <Link href="/ops" className={buttonClass("ghost", "sm")}>
             T&amp;S home
           </Link>
+          <a
+            href="/api/v1/ops/pilot/export"
+            className={buttonClass("secondary", "sm")}
+          >
+            Export CSV
+          </a>
           <Link href="/pilot" className={buttonClass("secondary", "sm")}>
             Public form
           </Link>

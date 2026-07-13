@@ -1,4 +1,3 @@
-import { nanoid } from "nanoid";
 import type { Notifier, NotifyMessage } from "@/lib/ports/notify";
 import { FileNotifier } from "@/lib/adapters/notify/file-notifier";
 import { getEnv } from "@/config/env";
@@ -50,10 +49,51 @@ export class WebhookNotifier implements Notifier {
   }
 }
 
+/**
+ * Composite that tries primary sender; FileNotifier is always the durable base
+ * inside Postmark/SES/Webhook adapters.
+ */
 export function createNotifier(): Notifier {
-  if (process.env.NOTIFY_WEBHOOK_URL) return new WebhookNotifier();
+  const env = getEnv();
+
+  if (env.NOTIFY_BACKEND === "postmark" && env.POSTMARK_SERVER_TOKEN) {
+    // Sync façade — first send loads Postmark module
+    return lazyNotifier(async () => {
+      const { PostmarkNotifier } = await import("@/lib/adapters/notify/postmark");
+      return new PostmarkNotifier();
+    });
+  }
+
+  if (env.NOTIFY_BACKEND === "ses") {
+    return lazyNotifier(async () => {
+      const { SesNotifier } = await import("@/lib/adapters/notify/ses");
+      return new SesNotifier();
+    });
+  }
+
+  if (env.NOTIFY_BACKEND === "webhook" || env.NOTIFY_WEBHOOK_URL) {
+    return new WebhookNotifier();
+  }
+
   return new FileNotifier();
 }
 
-// silence unused nanoid if tree-shaken differently
-void nanoid;
+function lazyNotifier(factory: () => Promise<Notifier>): Notifier {
+  let inner: Notifier | null = null;
+  let failed: Notifier | null = null;
+  return {
+    async send(message) {
+      if (failed) return failed.send(message);
+      try {
+        if (!inner) inner = await factory();
+        return await inner.send(message);
+      } catch (e) {
+        log.warn("notify_adapter_fallback_file", {
+          error: e instanceof Error ? e.message : "unknown",
+        });
+        failed = new FileNotifier();
+        return failed.send(message);
+      }
+    },
+  };
+}

@@ -49,8 +49,10 @@ Password for all: **`aegis-demo`**
 1. Sign in as `stylist@aegis.demo` → wallet / categories (in review)  
 2. Sign in as `ops@aegis.demo` → review queue → open stylist → CLEAR with rationale  
 3. Sign in as `client@aegis.demo` → new request (chauffeur/PA) → shortlist → Sign NDA + engage  
-4. Provider bookings → CHECK_IN / CHECK_OUT  
-5. Ops → KPIs, incidents, playbook, audit  
+4. Provider bookings → CHECK_IN / CHECK_OUT → rate client; client rates member  
+5. Ops → **Pilot** (`/ops/pilot`) → log interviews / export CSV  
+6. Ops → KPIs, incidents, playbook, audit  
+7. Public: `/pilot`, `/passport/sam-okonkwo-pa`, `/legal/terms`
 
 ## Scripts
 
@@ -58,17 +60,27 @@ Password for all: **`aegis-demo`**
 |---|---|
 | `npm run dev` | Next.js on port **3010** |
 | `npm run build` | Production build |
-| `npm test` | Vitest (match, AI, KPI) |
+| `npm test` | Vitest |
+| `npm run test:smoke` | Playwright browser smoke (server up) |
+| `npm run ci` | test + build |
 | `npm run db:seed` | Seed demo data |
 | `npm run db:push` | Push Prisma schema |
+| `npm run export:audit` | Audit NDJSON export |
+| `npm run export:pilot` | Pilot leads CSV |
+| `npm run job:expiry` | Credential / passport expiry |
+| `npm run job:drain-outbox` | Domain event drain |
 
 ## Product surface
 
-- **Trust engine:** credential wallet, mock IDV, compliance matrix, AI advisory, ops clearance  
-- **Concierge:** requests, explainable match, contracts, bookings, logs, reviews  
-- **T&S:** queues, playbook, incidents, live KPIs, audit  
-- **Scaffold:** `/verticals/security`, `/verticals/care`  
-- **Docs:** `/docs/investor`, `/docs/architecture`, `/docs/compliance`  
+- **Trust engine:** credential wallet, IDV adapters + webhooks, OCR, compliance matrix, dual-control CLEAR  
+- **Concierge:** requests, explainable match, contracts, bookings, logs, bidirectional ratings  
+- **Care pathway:** family-approved carers, care circle  
+- **Marketplace:** payment intents + Connect fee split (stub/Stripe)  
+- **Pilot:** `/pilot` demand capture, `/ops/pilot` go-signal KPIs  
+- **T&S:** queues, playbook, incidents, KPIs, audit  
+- **Legal drafts:** `/legal/terms`, `/legal/privacy` (not lawyer-reviewed)  
+- **Verticals:** security, care, robots  
+- **Docs:** `/docs/*`, [PRODUCTION_PATH](./docs/PRODUCTION_PATH.md)  
 
 ## Disclaimer
 
@@ -86,13 +98,15 @@ Palantir-grade ops aesthetic + stealth controls: hardened headers, rate-limited 
 | Version + flags | `GET /api/v1/version` |
 | Categories | `GET /api/v1/categories` |
 | Session | `GET /api/v1/me` |
+| IDV complete | `POST /api/v1/idv/complete` |
+| IDV webhook | `POST /api/v1/idv/webhook` |
 | Payment intent | `POST /api/v1/payments/intent` |
+| Payment webhook | `POST /api/v1/payments/webhook` |
+| Pilot CSV | `GET /api/v1/ops/pilot/export` (OPS) |
 | Expiry sweep | `POST /api/v1/ops/expiry` (OPS) |
 | Outbox peek | `GET /api/v1/events/outbox` (OPS) |
-| Audit export | `npm run export:audit` |
-| Expiry job | `npm run job:expiry` |
 
-Adapters: encrypted local storage, notification outbox, payments stub, IDV port.  
+Adapters: encrypted storage (local/S3), notify (file/webhook/Postmark/SES), payments (stub/Stripe Connect), IDV (MOCK/Trulioo/Socure).  
 See [docs/PRODUCTION_PATH.md](./docs/PRODUCTION_PATH.md), [docs/FUTURE_PROOF.md](./docs/FUTURE_PROOF.md).
 
 ## Docs

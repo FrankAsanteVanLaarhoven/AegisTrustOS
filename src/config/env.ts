@@ -30,6 +30,9 @@ const envSchema = z.object({
   S3_REGION: z.string().optional(),
   NOTIFY_BACKEND: z.enum(["file", "ses", "postmark", "webhook"]).default("file"),
   NOTIFY_WEBHOOK_URL: z.string().optional(),
+  NOTIFY_FROM_EMAIL: z.string().optional(),
+  POSTMARK_SERVER_TOKEN: z.string().optional(),
+  SES_REGION: z.string().optional(),
   PAYMENTS_BACKEND: z.enum(["stub", "stripe"]).default("stub"),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
@@ -38,6 +41,8 @@ const envSchema = z.object({
   UPSTASH_REDIS_REST_URL: z.string().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   DOMAIN_EVENT_WEBHOOK_URL: z.string().optional(),
+  /** Ops email for pilot interest alerts */
+  PILOT_NOTIFY_EMAIL: z.string().optional(),
   /** Postgres helper: set when using docker-compose */
   // DATABASE_URL=postgresql://aegis:aegis@localhost:5433/aegis
 });

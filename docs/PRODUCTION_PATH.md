@@ -36,7 +36,11 @@ npm run db:seed
 | `STORAGE_BACKEND` | local_encrypted \| s3 | Document store |
 | `DOCUMENT_ENCRYPTION_KEY` | secret | AES key material |
 | `S3_BUCKET` / `S3_REGION` | … | When `STORAGE_BACKEND=s3` (+ AWS creds) |
+| `NOTIFY_BACKEND` | file \| webhook \| postmark \| ses | Mail adapter |
 | `NOTIFY_WEBHOOK_URL` | https://… | Email/SMS bridge (Zapier/n8n/mailer) |
+| `POSTMARK_SERVER_TOKEN` / `NOTIFY_FROM_EMAIL` | … | Postmark |
+| `SES_REGION` + AWS keys | … | SES SendEmail |
+| `PILOT_NOTIFY_EMAIL` | ops@… | Pilot interest alerts |
 | `PAYMENTS_BACKEND` | stub \| stripe | Payments |
 | `STRIPE_SECRET_KEY` | sk_… | Live Stripe PaymentIntents |
 | `STRIPE_WEBHOOK_SECRET` | whsec_… | `/api/v1/payments/webhook` |
@@ -131,7 +135,11 @@ GitHub Actions: `.github/workflows/ci.yml` — unit/build + Playwright smoke.
 - [x] Draft terms + privacy pages (`/legal/*`) — not lawyer-reviewed  
 - [x] London pilot demand capture (`/pilot`, `/ops/pilot`, PilotLead KPIs)  
 - [x] Prod env guards for IDV/Stripe webhook secrets  
-- [ ] Live vendor keys in staging (Trulioo/Socure + Stripe Connect)  
+- [x] Postmark + SES notify adapters (keys optional)  
+- [x] Pilot honeypot + rate limit + CSV export  
+- [x] Client reputation (provider→client ratings on console)  
+- [x] Health readiness flags + expanded version surfaces  
+- [ ] Live vendor keys in staging (Trulioo/Socure + Stripe Connect + mail)  
 - [ ] Lawyer sign-off on terms / privacy / DPIA  
 - [ ] Complete 10–15 real interviews (tooling ready; execution is GTM)  
 
