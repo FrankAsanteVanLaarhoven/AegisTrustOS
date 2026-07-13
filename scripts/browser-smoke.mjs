@@ -133,25 +133,47 @@ try {
   await shot(page, "07-provider-dashboard");
 
   await page.goto(`${BASE}/provider/wallet`, { waitUntil: "networkidle" });
-  if ((await page.textContent("body"))?.includes("Credential") || (await page.textContent("body"))?.includes("wallet") || (await page.textContent("body"))?.includes("IDV"))
+  const walletBody = await page.textContent("body");
+  if (walletBody?.includes("Credential") || walletBody?.includes("wallet") || walletBody?.includes("IDV"))
     ok("provider_wallet");
   else fail("provider_wallet");
+  if (walletBody?.includes("Payouts") || walletBody?.includes("Connect") || walletBody?.includes("payout"))
+    ok("provider_connect_payouts");
+  else fail("provider_connect_payouts");
   await shot(page, "08-provider-wallet");
 
   await signOut(page);
 
-  // 5. Unauth protected route
+  // 5. Public passport + member ratings
   await context.clearCookies();
+  const passRes = await page.goto(`${BASE}/passport/sam-okonkwo-pa`, {
+    waitUntil: "networkidle",
+  });
+  const passBody = await page.textContent("body");
+  if (passRes?.ok() && (passBody?.includes("Member ratings") || passBody?.includes("rating") || passBody?.includes("★")))
+    ok("passport_member_ratings");
+  else fail("passport_member_ratings", passBody?.slice(0, 160));
+  await shot(page, "09-passport-ratings");
+
+  // 6. Unauth protected route
   const unauth = await page.goto(`${BASE}/ops`, { waitUntil: "networkidle" });
   if (page.url().includes("/login")) ok("protected_route_redirect");
   else fail("protected_route_redirect", page.url());
 
-  // 6. Categories public
+  // 7. Categories public
   await page.goto(`${BASE}/categories`, { waitUntil: "networkidle" });
   if ((await page.textContent("body"))?.includes("Personal Assistant") || (await page.textContent("body"))?.includes("Chauffeur"))
     ok("categories_page");
   else fail("categories_page");
-  await shot(page, "09-categories");
+  await shot(page, "10-categories");
+
+  // 8. IDV webhook endpoint rejects invalid JSON body gracefully
+  const wh = await page.request.post(`${BASE}/api/v1/idv/webhook`, {
+    data: { noSession: true },
+  });
+  const whJson = await wh.json().catch(() => ({}));
+  if (!wh.ok() || whJson?.ok === false) ok("idv_webhook_validation");
+  else fail("idv_webhook_validation", JSON.stringify(whJson));
 
 } catch (e) {
   fail("uncaught", e.message);

@@ -227,6 +227,9 @@ model ProviderProfile {
   riskScore       Int            @default(50)
   lastReviewedAt  DateTime?
   reviewedById    String?
+  /// Stripe Connect Express account (acct_…) for marketplace payouts
+  stripeConnectAccountId String?
+  stripeConnectStatus    String?  // pending | active | restricted
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -551,12 +554,16 @@ model IdvCheck {
   providerProfileId String
   provider          ProviderProfile @relation(fields: [providerProfileId], references: [id], onDelete: Cascade)
   vendor            IdvVendor       @default(MOCK)
+  /// Vendor session / transaction id — used by webhook callbacks
   externalRef       String?
   status            IdvStatus       @default(PENDING)
   livenessScore     Float?
   rawResultJson     String          @default("{}")
   completedAt       DateTime?
   createdAt         DateTime        @default(now())
+
+  @@index([externalRef])
+  @@index([providerProfileId, status])
 }
 
 model Incident {
@@ -713,18 +720,22 @@ enum PaymentStatus {
 }
 
 model PaymentIntent {
-  id           String        @id
-  amountPence  Int
-  currency     String        @default("gbp")
-  status       PaymentStatus @default(REQUIRES_PAYMENT)
-  clientId     String
-  providerId   String?
-  bookingId    String?
-  description  String?
-  clientSecret String?
-  providerRef  String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                    String        @id
+  amountPence           Int
+  currency              String        @default("gbp")
+  status                PaymentStatus @default(REQUIRES_PAYMENT)
+  clientId              String
+  providerId            String?
+  bookingId             String?
+  description           String?
+  clientSecret          String?
+  providerRef           String?
+  /// Platform take (Connect application fee)
+  applicationFeePence   Int?
+  /// Stripe Connect destination account
+  transferDestination   String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   @@index([clientId])
   @@index([bookingId])

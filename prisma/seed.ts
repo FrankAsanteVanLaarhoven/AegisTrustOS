@@ -156,6 +156,8 @@ async function main() {
       skillsJson: JSON.stringify(["calendar", "travel", "vendors", "discretion"]),
       lastReviewedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
       reviewedById: ops.id,
+      stripeConnectAccountId: "acct_stub_demo_pa",
+      stripeConnectStatus: "active",
     },
     create: {
       userId: paUser.id,
@@ -169,6 +171,8 @@ async function main() {
       skillsJson: JSON.stringify(["calendar", "travel", "vendors", "discretion"]),
       lastReviewedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
       reviewedById: ops.id,
+      stripeConnectAccountId: "acct_stub_demo_pa",
+      stripeConnectStatus: "active",
     },
   });
 

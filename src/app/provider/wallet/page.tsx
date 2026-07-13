@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { addCredential, runIdvCheck } from "@/lib/actions";
+import {
+  addCredential,
+  runIdvCheck,
+  startConnectOnboarding,
+} from "@/lib/actions";
 import { Badge } from "@/components/ui/badge";
 import { buttonClass } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
@@ -112,11 +116,47 @@ export default async function WalletPage() {
 
       <Card>
         <CardHeader
+          title="Payouts (Connect)"
+          subtitle="Marketplace split — platform fee + transfer to your connected account"
+        />
+        <CardBody className="space-y-3 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-zinc-300">
+                Status:{" "}
+                <span className="font-mono text-zinc-100">
+                  {profile.stripeConnectStatus ?? "not linked"}
+                </span>
+              </p>
+              {profile.stripeConnectAccountId ? (
+                <p className="mt-1 font-mono text-[10px] text-zinc-500">
+                  {profile.stripeConnectAccountId}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Link a payout account so completed bookings can settle with a
+                  platform fee.
+                </p>
+              )}
+            </div>
+            <form action={startConnectOnboarding}>
+              <button type="submit" className={buttonClass("secondary", "sm")}>
+                {profile.stripeConnectAccountId
+                  ? "Refresh Connect link"
+                  : "Enable payouts"}
+              </button>
+            </form>
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
           title="Wallet contents"
           action={
             <form action={runIdvCheck}>
               <button type="submit" className={buttonClass("secondary", "sm")}>
-                Run mock IDV
+                Run IDV check
               </button>
             </form>
           }
@@ -164,7 +204,7 @@ export default async function WalletPage() {
       <Card>
         <CardHeader
           title="IDV history"
-          subtitle="Mock vendor today · production: Trulioo/Socure-class via IdvProvider adapter"
+          subtitle="Adapter: MOCK · Trulioo · Socure — webhooks at /api/v1/idv/webhook"
         />
         <CardBody>
           <ul className="space-y-2 text-sm">
@@ -174,9 +214,25 @@ export default async function WalletPage() {
                 className="flex justify-between rounded-lg border border-white/[0.06] px-3 py-2"
               >
                 <span>
-                  {c.vendor} · liveness {c.livenessScore ?? "—"}
+                  {c.vendor}
+                  {c.externalRef ? (
+                    <span className="ml-1 font-mono text-[10px] text-zinc-600">
+                      {c.externalRef.slice(0, 24)}
+                    </span>
+                  ) : null}{" "}
+                  · liveness {c.livenessScore ?? "—"}
                 </span>
-                <Badge tone={c.status === "PASSED" ? "success" : "warn"}>{c.status}</Badge>
+                <Badge
+                  tone={
+                    c.status === "PASSED"
+                      ? "success"
+                      : c.status === "PENDING"
+                        ? "muted"
+                        : "warn"
+                  }
+                >
+                  {c.status}
+                </Badge>
               </li>
             ))}
             {!profile.idvChecks.length ? (

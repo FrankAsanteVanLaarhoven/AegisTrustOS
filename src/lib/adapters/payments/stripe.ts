@@ -1,11 +1,16 @@
-import type { PaymentIntent, PaymentIntentInput, PaymentsPort } from "@/lib/ports/payments";
+import type {
+  ConnectAccountLink,
+  PaymentIntent,
+  PaymentIntentInput,
+  PaymentsPort,
+} from "@/lib/ports/payments";
 import { db } from "@/lib/db";
 import { getEnv } from "@/config/env";
 import { log } from "@/lib/observability/logger";
 import { nanoid } from "nanoid";
 
 /**
- * Stripe PaymentIntents adapter.
+ * Stripe PaymentIntents + Connect destination charges.
  * Requires STRIPE_SECRET_KEY. Falls back is handled by container (stub).
  */
 export class StripePayments implements PaymentsPort {
@@ -19,13 +24,21 @@ export class StripePayments implements PaymentsPort {
   private async stripeRequest(
     path: string,
     params: Record<string, string>,
+    method: "POST" | "GET" = "POST",
   ): Promise<Record<string, unknown>> {
-    const body = new URLSearchParams(params);
-    const res = await fetch(`https://api.stripe.com/v1${path}`, {
-      method: "POST",
+    const body =
+      method === "POST" ? new URLSearchParams(params).toString() : undefined;
+    const url =
+      method === "GET" && Object.keys(params).length
+        ? `https://api.stripe.com/v1${path}?${new URLSearchParams(params)}`
+        : `https://api.stripe.com/v1${path}`;
+    const res = await fetch(url, {
+      method,
       headers: {
         Authorization: `Bearer ${this.secret}`,
-        "Content-Type": "application/x-www-form-urlencoded",
+        ...(method === "POST"
+          ? { "Content-Type": "application/x-www-form-urlencoded" }
+          : {}),
       },
       body,
     });
@@ -42,7 +55,22 @@ export class StripePayments implements PaymentsPort {
 
   async createIntent(input: PaymentIntentInput): Promise<PaymentIntent> {
     const currency = (input.currency ?? "gbp").toLowerCase();
-    const stripePi = await this.stripeRequest("/payment_intents", {
+    const feeBps =
+      input.platformFeeBps ?? getEnv().PLATFORM_FEE_BPS ?? 1500;
+    const applicationFeePence = Math.round(
+      (input.amountPence * feeBps) / 10_000,
+    );
+
+    let transferDestination = input.transferDestination ?? null;
+    if (!transferDestination && input.providerId) {
+      const provider = await db.providerProfile.findUnique({
+        where: { id: input.providerId },
+        select: { stripeConnectAccountId: true },
+      });
+      transferDestination = provider?.stripeConnectAccountId ?? null;
+    }
+
+    const params: Record<string, string> = {
       amount: String(input.amountPence),
       currency,
       "automatic_payment_methods[enabled]": "true",
@@ -50,7 +78,16 @@ export class StripePayments implements PaymentsPort {
       "metadata[bookingId]": input.bookingId ?? "",
       "metadata[clientId]": input.clientId,
       "metadata[providerId]": input.providerId ?? "",
-    });
+      "metadata[applicationFeePence]": String(applicationFeePence),
+    };
+
+    // Marketplace destination charge: platform fee + transfer to provider
+    if (transferDestination) {
+      params["application_fee_amount"] = String(applicationFeePence);
+      params["transfer_data[destination]"] = transferDestination;
+    }
+
+    const stripePi = await this.stripeRequest("/payment_intents", params);
 
     const id = String(stripePi.id ?? `pi_${nanoid(12)}`);
     const clientSecret = String(stripePi.client_secret ?? "");
@@ -67,10 +104,17 @@ export class StripePayments implements PaymentsPort {
         description: input.description ?? null,
         clientSecret,
         providerRef: "stripe",
+        applicationFeePence,
+        transferDestination,
       },
     });
 
-    log.info("stripe_intent_created", { id, amountPence: input.amountPence });
+    log.info("stripe_intent_created", {
+      id,
+      amountPence: input.amountPence,
+      applicationFeePence,
+      transferDestination,
+    });
 
     return {
       id,
@@ -79,12 +123,12 @@ export class StripePayments implements PaymentsPort {
       currency,
       clientSecret,
       providerRef: "stripe",
+      applicationFeePence,
+      transferDestination: transferDestination ?? undefined,
     };
   }
 
   async capture(intentId: string): Promise<PaymentIntent> {
-    // For automatic methods, confirm is client-side; mark succeeded when webhook arrives.
-    // Manual capture path:
     try {
       await this.stripeRequest(`/payment_intents/${intentId}/capture`, {});
     } catch {
@@ -94,14 +138,7 @@ export class StripePayments implements PaymentsPort {
       where: { id: intentId },
       data: { status: "SUCCEEDED" },
     });
-    return {
-      id: row.id,
-      status: "succeeded",
-      amountPence: row.amountPence,
-      currency: row.currency,
-      clientSecret: row.clientSecret ?? undefined,
-      providerRef: "stripe",
-    };
+    return map(row);
   }
 
   async refund(intentId: string, amountPence?: number): Promise<PaymentIntent> {
@@ -114,12 +151,80 @@ export class StripePayments implements PaymentsPort {
       where: { id: intentId },
       data: { status: "CANCELLED" },
     });
+    return map(row);
+  }
+
+  async ensureConnectAccount(input: {
+    providerId: string;
+    email: string;
+    refreshUrl: string;
+    returnUrl: string;
+  }): Promise<ConnectAccountLink> {
+    const profile = await db.providerProfile.findUnique({
+      where: { id: input.providerId },
+    });
+    if (!profile) throw new Error("Provider not found");
+
+    let accountId = profile.stripeConnectAccountId;
+    if (!accountId) {
+      const acct = await this.stripeRequest("/accounts", {
+        type: "express",
+        country: "GB",
+        email: input.email,
+        "capabilities[card_payments][requested]": "true",
+        "capabilities[transfers][requested]": "true",
+        "business_profile[product_description]": "Aegis verified services",
+        "metadata[providerId]": input.providerId,
+      });
+      accountId = String(acct.id);
+      await db.providerProfile.update({
+        where: { id: input.providerId },
+        data: {
+          stripeConnectAccountId: accountId,
+          stripeConnectStatus: "pending",
+        },
+      });
+    }
+
+    const link = await this.stripeRequest("/account_links", {
+      account: accountId,
+      refresh_url: input.refreshUrl,
+      return_url: input.returnUrl,
+      type: "account_onboarding",
+    });
+
     return {
-      id: row.id,
-      status: "cancelled",
-      amountPence: row.amountPence,
-      currency: row.currency,
-      providerRef: "stripe",
+      accountId,
+      url: String(link.url ?? input.returnUrl),
+      status: "pending",
     };
   }
+}
+
+function map(row: {
+  id: string;
+  status: string;
+  amountPence: number;
+  currency: string;
+  clientSecret: string | null;
+  providerRef: string | null;
+  applicationFeePence?: number | null;
+  transferDestination?: string | null;
+}): PaymentIntent {
+  const statusMap: Record<string, PaymentIntent["status"]> = {
+    REQUIRES_PAYMENT: "requires_payment",
+    PROCESSING: "processing",
+    SUCCEEDED: "succeeded",
+    CANCELLED: "cancelled",
+  };
+  return {
+    id: row.id,
+    status: statusMap[row.status] ?? "requires_payment",
+    amountPence: row.amountPence,
+    currency: row.currency,
+    clientSecret: row.clientSecret ?? undefined,
+    providerRef: row.providerRef ?? undefined,
+    applicationFeePence: row.applicationFeePence ?? undefined,
+    transferDestination: row.transferDestination ?? undefined,
+  };
 }

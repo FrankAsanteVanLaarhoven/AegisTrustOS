@@ -13,7 +13,6 @@ import { db } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { buildAssessment } from "@/lib/ai/assist";
 import { CATEGORY_SEEDS } from "@/lib/compliance/matrix";
-import { getIdvProvider } from "@/lib/idv/provider";
 import { rankMatches, LONDON_CENTER } from "@/lib/matching/engine";
 import { parseJsonArray } from "@/lib/utils";
 import { renderTemplate } from "@/lib/contracts/templates";
@@ -199,35 +198,53 @@ export async function runIdvCheck() {
   });
   if (!profile) throw new Error("No provider profile");
 
-  const idv = getIdvProvider();
-  const session = await idv.startCheck({
+  const { startProviderIdv } = await import("@/lib/services/idv-service");
+  await startProviderIdv({
+    providerProfileId: profile.id,
     fullName: profile.user.name,
     email: profile.user.email,
-  });
-  const result = await idv.getResult(session.sessionId);
-
-  await db.idvCheck.create({
-    data: {
-      providerProfileId: profile.id,
-      vendor: "MOCK",
-      externalRef: result.sessionId,
-      status: result.status,
-      livenessScore: result.livenessScore,
-      rawResultJson: JSON.stringify(result.raw),
-      completedAt: new Date(),
-    },
-  });
-
-  await writeAudit({
     actorId: user.id,
-    entityType: "IdvCheck",
-    entityId: profile.id,
-    action: "IDV_RUN",
-    payload: { status: result.status, livenessScore: result.livenessScore },
   });
 
   revalidatePath("/provider");
   revalidatePath("/provider/wallet");
+}
+
+/** Stripe Connect Express onboarding (or stub account link). */
+export async function startConnectOnboarding() {
+  const user = await requireUser(["PROVIDER"]);
+  const profile = await db.providerProfile.findUnique({
+    where: { userId: user.id },
+    include: { user: true },
+  });
+  if (!profile) throw new Error("No provider profile");
+
+  const { getContainer } = await import("@/lib/container");
+  const { payments } = getContainer();
+  if (!payments.ensureConnectAccount) {
+    throw new Error("Connect onboarding not available on this payments backend");
+  }
+
+  const base =
+    process.env.NEXTAUTH_URL ?? process.env.AUTH_URL ?? "http://localhost:3010";
+  const link = await payments.ensureConnectAccount({
+    providerId: profile.id,
+    email: profile.user.email,
+    refreshUrl: `${base}/provider/wallet?connect=refresh`,
+    returnUrl: `${base}/provider/wallet?connect=return`,
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "ProviderProfile",
+    entityId: profile.id,
+    action: "CONNECT_ONBOARD_START",
+    payload: { accountId: link.accountId, status: link.status },
+    eventType: "payment.connect_linked",
+  });
+
+  revalidatePath("/provider/wallet");
+  redirect(link.url);
 }
 
 export async function trustDecision(formData: FormData) {

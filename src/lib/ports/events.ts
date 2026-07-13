@@ -5,7 +5,9 @@ export type DomainEventType =
   | "provider.profile_updated"
   | "provider.credential_added"
   | "provider.category_submitted"
+  | "provider.idv_started"
   | "provider.idv_completed"
+  | "provider.idv_webhook"
   | "trust.decision"
   | "trust.cleared"
   | "request.created"
@@ -14,7 +16,10 @@ export type DomainEventType =
   | "booking.completed"
   | "incident.opened"
   | "incident.resolved"
-  | "review.created";
+  | "review.created"
+  | "payment.succeeded"
+  | "payment.cancelled"
+  | "payment.connect_linked";
 
 export type DomainEvent = {
   type: DomainEventType;

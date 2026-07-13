@@ -9,6 +9,12 @@ const envSchema = z.object({
   AUTH_SECRET: z.string().min(16).optional(),
   NEXTAUTH_URL: z.string().optional(),
   IDV_VENDOR: z.enum(["MOCK", "TRULIOO", "SOCURE"]).default("MOCK"),
+  /** Shared secret / HMAC key for /api/v1/idv/webhook */
+  IDV_WEBHOOK_SECRET: z.string().optional(),
+  TRULIOO_API_KEY: z.string().optional(),
+  TRULIOO_BASE_URL: z.string().optional(),
+  SOCURE_API_KEY: z.string().optional(),
+  SOCURE_BASE_URL: z.string().optional(),
   JURISDICTION_DEFAULT: z.string().default("UK"),
   SESSION_MAX_AGE_HOURS: z.coerce.number().min(1).max(168).default(8),
   AUDIT_RETENTION_DAYS: z.coerce.number().min(30).default(2555),
@@ -26,6 +32,9 @@ const envSchema = z.object({
   NOTIFY_WEBHOOK_URL: z.string().optional(),
   PAYMENTS_BACKEND: z.enum(["stub", "stripe"]).default("stub"),
   STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  /** Marketplace platform fee in basis points (1500 = 15%) */
+  PLATFORM_FEE_BPS: z.coerce.number().min(0).max(5000).default(1500),
   UPSTASH_REDIS_REST_URL: z.string().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   DOMAIN_EVENT_WEBHOOK_URL: z.string().optional(),

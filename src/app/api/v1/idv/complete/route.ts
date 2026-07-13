@@ -68,27 +68,41 @@ export async function POST(req: Request) {
     text: profile.user.name,
   });
 
-  const started = await idv.startCheck({
-    fullName: profile.user.name,
-    email: profile.user.email,
-  });
-  const result = await idv.getResult(started.sessionId);
-
-  const check = await db.idvCheck.create({
-    data: {
+  const { startProviderIdv } = await import("@/lib/services/idv-service");
+  const { check: baseCheck, result: idvResult, session: started } =
+    await startProviderIdv({
       providerProfileId: profile.id,
-      vendor: started.vendor === "MOCK" ? "MOCK" : "OTHER",
-      externalRef: started.sessionId,
-      status: result.status,
-      livenessScore: body.livenessScore ?? result.livenessScore,
-      completedAt: new Date(),
+      fullName: profile.user.name,
+      email: profile.user.email,
+      actorId: session.user.id,
+    });
+
+  // Prefer synchronous result (MOCK); live vendors may still be PENDING
+  const result =
+    idvResult ??
+    (await idv.getResult(started.sessionId).catch(() => null));
+
+  const status =
+    result?.status === "PASSED" ||
+    result?.status === "FAILED" ||
+    result?.status === "EXPIRED"
+      ? result.status
+      : baseCheck.status;
+
+  const check = await db.idvCheck.update({
+    where: { id: baseCheck.id },
+    data: {
+      status,
+      livenessScore: body.livenessScore ?? result?.livenessScore ?? null,
+      completedAt: status === "PENDING" ? null : new Date(),
       rawResultJson: JSON.stringify({
-        ...result.raw,
+        ...(result?.raw ?? {}),
         idObjectKey: idStored.key,
         selfieObjectKey: selfieStored.key,
         encrypted: true,
         clientLiveness: body.livenessScore,
         ocr: extraction.payload,
+        cameraFlow: true,
       }),
     },
   });
@@ -121,7 +135,7 @@ export async function POST(req: Request) {
     entityId: check.id,
     action: "IDV_CAMERA_COMPLETE",
     payload: {
-      status: result.status,
+      status,
       liveness: body.livenessScore,
       encrypted: true,
       ocrConfidence: extraction.payload.overallConfidence,
@@ -132,8 +146,8 @@ export async function POST(req: Request) {
 
   return apiOk({
     checkId: check.id,
-    status: result.status,
-    livenessScore: body.livenessScore ?? result.livenessScore,
+    status,
+    livenessScore: body.livenessScore ?? result?.livenessScore ?? null,
     encrypted: true,
     ocr: {
       documentKind: extraction.payload.documentKind,
