@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: aegis-expiry
+  namespace: aegis
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: expiry
+              image: ghcr.io/OWNER/aegis-trust-os:latest
+              command: ["npx", "tsx", "scripts/expiry-sweep.ts"]
+              envFrom:
+                - secretRef:
+                    name: aegis-app-secrets
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: aegis-drain-outbox
+  namespace: aegis
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: drain
+              image: ghcr.io/OWNER/aegis-trust-os:latest
+              command: ["npx", "tsx", "scripts/drain-outbox.ts"]
+              envFrom:
+                - secretRef:
+                    name: aegis-app-secrets

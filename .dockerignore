@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+uploads
+prisma/dev.db
+prisma/*.db
+browser-test-results
+coverage
+*.md
+!docs/**
+.github
+deploy/terraform/.terraform
+deploy/terraform/*.tfstate*

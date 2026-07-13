@@ -1,0 +1,91 @@
+name: CD · Vercel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Vercel environment
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - preview
+
+concurrency:
+  group: cd-vercel-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: ${{ github.event.inputs.environment || 'production' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require Vercel token
+        id: gate
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::VERCEL_TOKEN not set — skipping Vercel deploy. Add secrets: VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.skip != 'true'
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install Vercel CLI
+        if: steps.gate.outputs.skip != 'true'
+        run: npm i -g vercel@latest
+
+      - name: Pull Vercel env
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          vercel pull --yes --environment=${{ github.event.inputs.environment || 'production' }} --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build project artifacts
+        if: steps.gate.outputs.skip != 'true'
+        run: vercel build ${{ (github.event.inputs.environment || 'production') == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy prebuilt
+        id: deploy
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          URL=$(vercel deploy --prebuilt ${{ (github.event.inputs.environment || 'production') == 'production' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Deployed: $URL"
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Post-deploy readiness
+        if: steps.gate.outputs.skip != 'true' && steps.deploy.outputs.url != ''
+        run: |
+          BASE="${{ steps.deploy.outputs.url }}"
+          for i in $(seq 1 30); do
+            if curl -sf "$BASE/api/v1/ready" >/dev/null; then
+              echo "Ready: $BASE"
+              curl -sf "$BASE/api/v1/health" | head -c 300
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Readiness failed for $BASE"
+          exit 1

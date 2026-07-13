@@ -41,8 +41,15 @@ Request (active category) → rankMatches → shortlist → NDA+SERVICE e-sign (
 ## Vertical activation
 `Category.mode`: ACTIVE | WAITLIST | DISABLED. Security/care waitlisted in seed.
 
+## Deploy shape
+**Modular monolith** (ADR 0003): one Next.js deploy unit; ports for IDV, storage, notify, payments, OCR, events.  
+CI/CD: GitHub Actions (`ci.yml` + `cd-vercel` / `cd-terraform` / `cd-k8s` / `cd-jobs`).  
+Probes: `/api/v1/health`, `/api/v1/ready`, `/api/v1/metrics`.
+
 ## Related docs
 - `docs/BRAND.md`
+- `docs/DEPLOYMENT.md`
 - `docs/COMPETITIVE_MATRIX.md`
 - `docs/HYBRID_IDV_ARCHITECTURE.md`
 - `docs/DEMAND_VALIDATION.md`
+- `docs/ADR/0003-modular-monolith-deploy.md`

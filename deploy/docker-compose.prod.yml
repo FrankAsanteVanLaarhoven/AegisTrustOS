@@ -1,0 +1,43 @@
+# Production-like local/staging stack
+# Usage: docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+services:
+  postgres:
+    # inherited from root docker-compose.yml
+    ports:
+      - "5433:5432"
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: aegis-trust-os:local
+    container_name: aegis-app
+    restart: unless-stopped
+    ports:
+      - "3010:3010"
+    environment:
+      NODE_ENV: production
+      PORT: "3010"
+      DATABASE_URL: postgresql://aegis:aegis@postgres:5432/aegis
+      AUTH_SECRET: ${AUTH_SECRET:-change-me-to-a-32-char-minimum-secret!!}
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3010}
+      IDV_VENDOR: ${IDV_VENDOR:-MOCK}
+      PAYMENTS_BACKEND: ${PAYMENTS_BACKEND:-stub}
+      NOTIFY_BACKEND: ${NOTIFY_BACKEND:-file}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local_encrypted}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "-qO-",
+          "http://127.0.0.1:3010/api/v1/ready",
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 45s

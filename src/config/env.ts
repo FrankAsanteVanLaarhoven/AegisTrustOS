@@ -43,6 +43,8 @@ const envSchema = z.object({
   DOMAIN_EVENT_WEBHOOK_URL: z.string().optional(),
   /** Ops email for pilot interest alerts */
   PILOT_NOTIFY_EMAIL: z.string().optional(),
+  /** Vercel Cron / GitHub Actions bearer for maintenance routes */
+  CRON_SECRET: z.string().optional(),
   /** Postgres helper: set when using docker-compose */
   // DATABASE_URL=postgresql://aegis:aegis@localhost:5433/aegis
 });

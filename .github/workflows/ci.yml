@@ -10,9 +10,15 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NODE_VERSION: "22"
+  DATABASE_URL: file:./ci.db
+  AUTH_SECRET: ci-test-secret-at-least-32-characters-long
+
 jobs:
+  # ── Unit tests + production build ───────────────────────
   unit:
-    name: Unit + typecheck + build
+    name: Unit · typecheck · build
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -20,31 +26,142 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install
         run: npm ci
 
-      - name: Prisma generate + push (SQLite)
-        env:
-          DATABASE_URL: file:./ci.db
+      - name: Prisma generate + push
         run: |
           npx prisma generate
           npx prisma db push --skip-generate
 
       - name: Unit tests
-        env:
-          DATABASE_URL: file:./ci.db
-          AUTH_SECRET: ci-test-secret-at-least-32-characters-long
         run: npm test
 
       - name: Build
         env:
-          DATABASE_URL: file:./ci.db
-          AUTH_SECRET: ci-test-secret-at-least-32-characters-long
+          NEXT_TELEMETRY_DISABLED: "1"
         run: npm run build
 
+      - name: Backend checks (static)
+        run: |
+          test -f src/app/api/v1/health/route.ts
+          test -f src/app/api/v1/ready/route.ts
+          test -f src/app/api/v1/metrics/route.ts
+          test -f Dockerfile
+          test -f vercel.json
+          test -f deploy/terraform/main.tf
+          test -d deploy/k8s
+
+  # ── Docker image build (always; push only on main) ──────
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: unit
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/aegis-trust-os
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Login GHCR
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and push on main)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Terraform validate + plan ───────────────────────────
+  terraform:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: unit
+    defaults:
+      run:
+        working-directory: deploy/terraform
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform init
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Detect AWS credentials
+        id: aws
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        run: |
+          if [ -n "$AWS_ACCESS_KEY_ID" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No AWS keys — terraform plan skipped (validate still ran)"
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.aws.outputs.present == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-2' }}
+
+      - name: Terraform plan
+        if: steps.aws.outputs.present == 'true'
+        run: |
+          terraform plan -input=false -var="environment=staging" -out=tfplan
+        env:
+          TF_VAR_auth_secret: ${{ secrets.AUTH_SECRET }}
+          TF_VAR_document_encryption_key: ${{ secrets.DOCUMENT_ENCRYPTION_KEY }}
+
+      - name: Upload plan artifact
+        if: steps.aws.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-staging
+          path: deploy/terraform/tfplan
+          if-no-files-found: ignore
+
+  # ── Playwright smoke (ephemeral server) ─────────────────
   smoke:
     name: Playwright smoke
     runs-on: ubuntu-latest
@@ -55,51 +172,52 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
       - name: Install
         run: npm ci
 
-      - name: Install Playwright browser
+      - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 
       - name: Prisma + seed
-        env:
-          DATABASE_URL: file:./ci.db
-          AUTH_SECRET: ci-test-secret-at-least-32-characters-long
         run: |
           npx prisma generate
           npx prisma db push --skip-generate
           npm run db:seed
 
-      - name: Start server
+      - name: Build & start
         env:
-          DATABASE_URL: file:./ci.db
-          AUTH_SECRET: ci-test-secret-at-least-32-characters-long
           NEXTAUTH_URL: http://localhost:3010
-          PORT: "3010"
+          NEXT_TELEMETRY_DISABLED: "1"
         run: |
           npm run build
           npm run start &
-          echo $! > server.pid
           for i in $(seq 1 60); do
-            if curl -sf http://localhost:3010/api/v1/health >/dev/null; then
-              echo "Server ready"
+            if curl -sf http://localhost:3010/api/v1/ready >/dev/null; then
+              echo "ready"
               exit 0
             fi
             sleep 2
           done
-          echo "Server failed to start"
+          echo "Server failed readiness"
           exit 1
 
-      - name: Smoke tests
+      - name: Smoke
         env:
           AEGIS_URL: http://localhost:3010
-          DATABASE_URL: file:./ci.db
         run: npm run test:smoke
 
-      - name: Upload screenshots
+      - name: Probe metrics
+        run: |
+          curl -sf http://localhost:3010/api/v1/health | head -c 400
+          echo
+          curl -sf http://localhost:3010/api/v1/ready | head -c 400
+          echo
+          curl -sf http://localhost:3010/api/v1/metrics | head -20
+
+      - name: Upload smoke artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:

@@ -1,0 +1,6 @@
+aws_region          = "eu-west-2"
+environment         = "staging"
+db_instance_class   = "db.t4g.micro"
+db_allocated_storage = 20
+# auth_secret = "set-via-TF_VAR_auth_secret-in-ci"
+# document_encryption_key = "set-via-TF_VAR-..."

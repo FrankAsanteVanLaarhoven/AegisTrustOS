@@ -139,6 +139,10 @@ GitHub Actions: `.github/workflows/ci.yml` — unit/build + Playwright smoke.
 - [x] Pilot honeypot + rate limit + CSV export  
 - [x] Client reputation (provider→client ratings on console)  
 - [x] Health readiness flags + expanded version surfaces  
+- [x] CI/CD pipelines (GitHub Actions: CI + Vercel + Docker/GHCR + Terraform + K8s + cron jobs)  
+- [x] Docker standalone image + K8s manifests + Terraform AWS baseline  
+- [x] Prometheus metrics + Grafana dashboard + `/ready` probe  
+- [ ] Configure GitHub secrets (VERCEL_*, AWS_*, CRON_SECRET, DEPLOY_URL)  
 - [ ] Live vendor keys in staging (Trulioo/Socure + Stripe Connect + mail)  
 - [ ] Lawyer sign-off on terms / privacy / DPIA  
 - [ ] Complete 10–15 real interviews (tooling ready; execution is GTM)  

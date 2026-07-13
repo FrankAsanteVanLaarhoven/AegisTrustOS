@@ -94,7 +94,9 @@ Palantir-grade ops aesthetic + stealth controls: hardened headers, rate-limited 
 
 | Surface | Path |
 |---|---|
-| Health | `GET /api/v1/health` |
+| Health (liveness) | `GET /api/v1/health` |
+| Ready (readiness) | `GET /api/v1/ready` |
+| Metrics (Prometheus) | `GET /api/v1/metrics` |
 | Version + flags | `GET /api/v1/version` |
 | Categories | `GET /api/v1/categories` |
 | Session | `GET /api/v1/me` |
@@ -103,8 +105,20 @@ Palantir-grade ops aesthetic + stealth controls: hardened headers, rate-limited 
 | Payment intent | `POST /api/v1/payments/intent` |
 | Payment webhook | `POST /api/v1/payments/webhook` |
 | Pilot CSV | `GET /api/v1/ops/pilot/export` (OPS) |
-| Expiry sweep | `POST /api/v1/ops/expiry` (OPS) |
+| Expiry sweep | `POST /api/v1/ops/expiry` (OPS or `CRON_SECRET`) |
 | Outbox peek | `GET /api/v1/events/outbox` (OPS) |
+
+### CI/CD (GitHub Actions)
+
+| Workflow | Trigger | Does |
+|---|---|---|
+| `CI` | PR + push | tests, build, Docker, Terraform validate, smoke |
+| `CD · Vercel` | main / manual | deploy + ready probe |
+| `CD · Terraform AWS` | manual | plan / apply staging\|prod |
+| `CD · Kubernetes` | manual | apply manifests |
+| `CD · Scheduled jobs` | cron | expiry + outbox drain |
+
+Deploy guide: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md). Infra: `deploy/terraform`, `deploy/k8s`, `Dockerfile`, `vercel.json`.
 
 Adapters: encrypted storage (local/S3), notify (file/webhook/Postmark/SES), payments (stub/Stripe Connect), IDV (MOCK/Trulioo/Socure).  
 See [docs/PRODUCTION_PATH.md](./docs/PRODUCTION_PATH.md), [docs/FUTURE_PROOF.md](./docs/FUTURE_PROOF.md).

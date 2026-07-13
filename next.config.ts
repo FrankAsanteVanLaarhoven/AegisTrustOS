@@ -22,6 +22,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  // Docker / K8s / ECS image uses standalone server output
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   // Hide Next.js floating "N" / dev indicator from UI
   devIndicators: false,
   async headers() {

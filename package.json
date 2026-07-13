@@ -18,6 +18,9 @@
     "export:pilot": "tsx scripts/export-pilot.ts",
     "job:expiry": "tsx scripts/expiry-sweep.ts",
     "job:drain-outbox": "tsx scripts/drain-outbox.ts",
+    "docker:build": "NEXT_OUTPUT=standalone docker build -t aegis-trust-os:local .",
+    "docker:up": "docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build",
+    "obs:up": "docker compose -f deploy/docker-compose.observability.yml up -d",
     "postinstall": "prisma generate"
   },
   "prisma": {

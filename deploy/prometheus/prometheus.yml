@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: aegis
+    metrics_path: /api/v1/metrics
+    static_configs:
+      # Host network / docker desktop
+      - targets: ["host.docker.internal:3010"]
+        labels:
+          env: local
+      # Compose app service name when on same network
+      - targets: ["app:3010"]
+        labels:
+          env: compose

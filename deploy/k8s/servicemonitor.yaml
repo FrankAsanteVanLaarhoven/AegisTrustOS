@@ -1,0 +1,16 @@
+# Optional: requires Prometheus Operator
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: aegis-web
+  namespace: aegis
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: aegis-web
+  endpoints:
+    - port: http
+      path: /api/v1/metrics
+      interval: 30s

@@ -1,0 +1,71 @@
+name: CD · Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag (sha or latest)
+        required: true
+        default: latest
+      dry_run:
+        description: kubectl apply --dry-run=client
+        type: boolean
+        default: true
+
+concurrency:
+  group: cd-k8s
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Apply K8s manifests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gate kubeconfig
+        id: gate
+        run: |
+          if [ -z "${{ secrets.KUBE_CONFIG }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::KUBE_CONFIG secret not set — skipping K8s deploy"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup kubeconfig
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Render image tag
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          TAG="${{ github.event.inputs.image_tag }}"
+          IMG="ghcr.io/${OWNER}/aegis-trust-os:${TAG}"
+          sed -i "s|ghcr.io/OWNER/aegis-trust-os:latest|${IMG}|g" deploy/k8s/deployment.yaml deploy/k8s/cronjobs.yaml
+          echo "IMAGE=$IMG"
+
+      - name: Apply
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          DRY=""
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY="--dry-run=client"
+          fi
+          kubectl apply $DRY -f deploy/k8s/namespace.yaml
+          kubectl apply $DRY -f deploy/k8s/deployment.yaml
+          kubectl apply $DRY -f deploy/k8s/service.yaml
+          kubectl apply $DRY -f deploy/k8s/ingress.yaml
+          kubectl apply $DRY -f deploy/k8s/cronjobs.yaml
+          # ServiceMonitor optional (CRD may not exist)
+          kubectl apply $DRY -f deploy/k8s/servicemonitor.yaml || true
+
+      - name: Rollout status
+        if: steps.gate.outputs.skip != 'true' && github.event.inputs.dry_run == false
+        run: kubectl -n aegis rollout status deployment/aegis-web --timeout=180s
