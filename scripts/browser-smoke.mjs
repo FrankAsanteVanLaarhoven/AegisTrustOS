@@ -175,6 +175,23 @@ try {
   if (!wh.ok() || whJson?.ok === false) ok("idv_webhook_validation");
   else fail("idv_webhook_validation", JSON.stringify(whJson));
 
+  // 9. Pilot + legal drafts
+  await page.goto(`${BASE}/pilot`, { waitUntil: "networkidle" });
+  if ((await page.textContent("body"))?.includes("pilot") || (await page.textContent("body"))?.includes("Pilot"))
+    ok("pilot_page");
+  else fail("pilot_page");
+  await shot(page, "11-pilot");
+
+  await page.goto(`${BASE}/legal/terms`, { waitUntil: "networkidle" });
+  if ((await page.textContent("body"))?.includes("Terms") || (await page.textContent("body"))?.includes("Draft"))
+    ok("legal_terms");
+  else fail("legal_terms");
+
+  await page.goto(`${BASE}/legal/privacy`, { waitUntil: "networkidle" });
+  if ((await page.textContent("body"))?.includes("Privacy") || (await page.textContent("body"))?.includes("GDPR"))
+    ok("legal_privacy");
+  else fail("legal_privacy");
+
 } catch (e) {
   fail("uncaught", e.message);
   await shot(page, "99-error").catch(() => null);

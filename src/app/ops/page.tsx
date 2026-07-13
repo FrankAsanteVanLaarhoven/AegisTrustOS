@@ -90,6 +90,9 @@ export default async function OpsDashboard() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/ops/pilot" className={buttonClass("primary", "sm")}>
+            Pilot
+          </Link>
           <Link href="/ops/kpis" className={buttonClass("secondary", "sm")}>
             KPIs
           </Link>

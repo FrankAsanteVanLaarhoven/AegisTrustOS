@@ -209,6 +209,7 @@ model User {
   reviews           Review[]
   partnerMemberships PartnerMembership[]
   incidentsOpened   Incident[]         @relation("IncidentOpener")
+  pilotLeadsCreated PilotLead[]
 }
 
 model ProviderProfile {
@@ -740,4 +741,56 @@ model PaymentIntent {
   @@index([clientId])
   @@index([bookingId])
   @@index([status])
+}
+
+/// London pilot demand validation — public interest + ops interview capture
+enum PilotLeadKind {
+  PUBLIC_INTEREST
+  INTERVIEW
+  SUPPLY
+  AGENCY
+}
+
+enum PilotLeadStatus {
+  NEW
+  CONTACTED
+  INTERVIEWED
+  PILOT_YES
+  PILOT_NO
+  NURTURE
+  CLOSED
+}
+
+model PilotLead {
+  id               String          @id @default(cuid())
+  kind             PilotLeadKind   @default(PUBLIC_INTEREST)
+  status           PilotLeadStatus @default(NEW)
+  /// buyer | provider | agency | other
+  persona          String?
+  name             String
+  email            String
+  organisation     String?
+  city             String          @default("London")
+  /// Comma / free-text categories of interest
+  categoriesJson   String          @default("[]")
+  interestScore    Int?
+  /// Named next-30-day use case (demand validation KPI)
+  nextUseCase      String?
+  wtpNotes         String?
+  painsJson        String          @default("[]")
+  trustIncident    Boolean?
+  pilotWilling     Boolean?
+  warmIntros       Int             @default(0)
+  objections       String?
+  notes            String?
+  source           String?         // landing | linkedin | referral | ops
+  interviewedAt    DateTime?
+  createdById      String?
+  createdBy        User?           @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  @@index([kind, status])
+  @@index([email])
+  @@index([createdAt])
 }

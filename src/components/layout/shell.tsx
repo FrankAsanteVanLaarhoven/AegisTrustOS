@@ -48,6 +48,9 @@ export async function SiteHeader() {
               </span>
             </Link>
             <nav className="hidden items-center gap-5 text-xs font-mono uppercase tracking-[0.1em] text-zinc-500 md:flex">
+              <Link href="/pilot" className="hover:text-[#3dd6c6] transition">
+                Pilot
+              </Link>
               <Link href="/how-it-works" className="hover:text-[#3dd6c6] transition">
                 How it works
               </Link>
@@ -136,11 +139,20 @@ export function SiteFooter() {
           </p>
         </div>
         <div className="flex flex-wrap gap-4 font-mono text-[10px] uppercase tracking-[0.12em]">
+          <Link href="/pilot" className="hover:text-[#3dd6c6]">
+            London pilot
+          </Link>
           <Link href="/how-it-works" className="hover:text-[#3dd6c6]">
             How it works
           </Link>
           <Link href="/categories" className="hover:text-[#3dd6c6]">
             Categories
+          </Link>
+          <Link href="/legal/terms" className="hover:text-[#3dd6c6]">
+            Terms
+          </Link>
+          <Link href="/legal/privacy" className="hover:text-[#3dd6c6]">
+            Privacy
           </Link>
           <Link href="/login" className="hover:text-[#3dd6c6]">
             Access

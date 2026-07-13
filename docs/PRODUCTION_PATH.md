@@ -128,9 +128,23 @@ GitHub Actions: `.github/workflows/ci.yml` — unit/build + Playwright smoke.
 - [x] Stripe Connect marketplace fee split (shaped; needs live keys)  
 - [x] CI Playwright + build pipeline  
 - [x] DPIA skeleton (`docs/DPIA.md`) — not lawyer-reviewed  
+- [x] Draft terms + privacy pages (`/legal/*`) — not lawyer-reviewed  
+- [x] London pilot demand capture (`/pilot`, `/ops/pilot`, PilotLead KPIs)  
+- [x] Prod env guards for IDV/Stripe webhook secrets  
 - [ ] Live vendor keys in staging (Trulioo/Socure + Stripe Connect)  
-- [ ] Lawyer-reviewed terms + privacy notice  
-- [ ] London pilot demand/supply validation  
+- [ ] Lawyer sign-off on terms / privacy / DPIA  
+- [ ] Complete 10–15 real interviews (tooling ready; execution is GTM)  
+
+## Pilot tooling
+
+| Surface | Purpose |
+|---|---|
+| `/pilot` | Public interest (buyer / supply / agency) |
+| `/ops/pilot` | Interview capture sheet + go-signal KPIs |
+| `PilotLead` | Durable demand/supply pipeline |
+| DEMAND_VALIDATION.md | Script & outreach copy |
+
+Go signal (engineered): ≥10 interviews and ≥70% interest ≥7/10.
 
 ## Invariants
 

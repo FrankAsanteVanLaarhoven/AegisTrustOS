@@ -1123,3 +1123,177 @@ export async function completeInterview(formData: FormData) {
   revalidatePath(`/ops/providers/${interview.providerId}`);
   revalidatePath(`/verify/room/${interview.roomCode}`);
 }
+
+/** Public London pilot interest (no auth). */
+export async function submitPilotInterest(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").toLowerCase().trim();
+  const organisation = String(formData.get("organisation") ?? "").trim();
+  const persona = String(formData.get("persona") ?? "").trim();
+  const side = String(formData.get("side") ?? "buyer"); // buyer | provider | agency
+  const nextUseCase = String(formData.get("nextUseCase") ?? "").trim();
+  const notes = String(formData.get("notes") ?? "").trim();
+  const categoriesRaw = String(formData.get("categories") ?? "").trim();
+  const categories = categoriesRaw
+    ? categoriesRaw.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  if (!name || !email.includes("@")) {
+    redirect("/pilot?error=invalid");
+  }
+
+  const { createPublicInterest } = await import("@/lib/services/pilot-service");
+  const kindSide =
+    side === "provider" ? "SUPPLY" : side === "agency" ? "AGENCY" : null;
+
+  let lead;
+  if (kindSide) {
+    lead = await db.pilotLead.create({
+      data: {
+        kind: kindSide,
+        status: "NEW",
+        name,
+        email,
+        organisation: organisation || null,
+        persona: persona || side,
+        city: "London",
+        categoriesJson: JSON.stringify(categories),
+        nextUseCase: nextUseCase || null,
+        notes: notes || null,
+        source: "landing",
+      },
+    });
+  } else {
+    lead = await createPublicInterest({
+      name,
+      email,
+      organisation,
+      persona: persona || "buyer",
+      categories,
+      nextUseCase,
+      notes,
+      source: "landing",
+    });
+  }
+
+  await writeAudit({
+    entityType: "PilotLead",
+    entityId: lead.id,
+    action: "PILOT_INTEREST",
+    payload: { email, side, categories },
+  });
+
+  try {
+    const { notifyUser } = await import("@/lib/services/notify-service");
+    await notifyUser({
+      email: "ops@aegis.demo",
+      subject: `Pilot interest: ${name}`,
+      body: [
+        `${name} <${email}> registered pilot interest.`,
+        organisation ? `Org: ${organisation}` : null,
+        `Side: ${side}`,
+        nextUseCase ? `Use case: ${nextUseCase}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      templateKey: "pilot_interest",
+    });
+  } catch {
+    /* non-blocking */
+  }
+
+  redirect("/pilot?ok=1");
+}
+
+/** Ops: log demand-validation interview from DEMAND_VALIDATION capture sheet. */
+export async function logPilotInterview(formData: FormData) {
+  const user = await requireUser(["OPS", "ADMIN"]);
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").toLowerCase().trim();
+  if (!name || !email.includes("@")) throw new Error("Name and email required");
+
+  const interestRaw = formData.get("interestScore");
+  const interestScore =
+    interestRaw === "" || interestRaw == null
+      ? null
+      : Number(interestRaw);
+
+  const pilotRaw = String(formData.get("pilotWilling") ?? "");
+  const pilotWilling =
+    pilotRaw === "yes" ? true : pilotRaw === "no" ? false : null;
+
+  const trustRaw = String(formData.get("trustIncident") ?? "");
+  const trustIncident =
+    trustRaw === "yes" ? true : trustRaw === "no" ? false : null;
+
+  const categories = String(formData.get("categories") ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const pains = String(formData.get("pains") ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const { createInterviewLead } = await import("@/lib/services/pilot-service");
+  const lead = await createInterviewLead({
+    name,
+    email,
+    organisation: String(formData.get("organisation") ?? "").trim() || undefined,
+    persona: String(formData.get("persona") ?? "").trim() || undefined,
+    categories,
+    interestScore: Number.isFinite(interestScore) ? interestScore : null,
+    nextUseCase: String(formData.get("nextUseCase") ?? "").trim() || undefined,
+    wtpNotes: String(formData.get("wtpNotes") ?? "").trim() || undefined,
+    pains,
+    trustIncident,
+    pilotWilling,
+    warmIntros: Number(formData.get("warmIntros") ?? 0) || 0,
+    objections: String(formData.get("objections") ?? "").trim() || undefined,
+    notes: String(formData.get("notes") ?? "").trim() || undefined,
+    source: "ops",
+    createdById: user.id,
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "PilotLead",
+    entityId: lead.id,
+    action: "PILOT_INTERVIEW_LOGGED",
+    payload: {
+      interestScore: lead.interestScore,
+      pilotWilling: lead.pilotWilling,
+    },
+  });
+
+  revalidatePath("/ops/pilot");
+  revalidatePath("/ops/kpis");
+  redirect("/ops/pilot?saved=1");
+}
+
+export async function updatePilotLeadStatus(formData: FormData) {
+  const user = await requireUser(["OPS", "ADMIN"]);
+  const id = String(formData.get("id") ?? "");
+  const status = String(formData.get("status") ?? "") as
+    | "NEW"
+    | "CONTACTED"
+    | "INTERVIEWED"
+    | "PILOT_YES"
+    | "PILOT_NO"
+    | "NURTURE"
+    | "CLOSED";
+  if (!id || !status) throw new Error("id and status required");
+
+  const { updateLeadStatus } = await import("@/lib/services/pilot-service");
+  await updateLeadStatus(id, status);
+
+  await writeAudit({
+    actorId: user.id,
+    entityType: "PilotLead",
+    entityId: id,
+    action: "PILOT_STATUS",
+    payload: { status },
+  });
+
+  revalidatePath("/ops/pilot");
+}

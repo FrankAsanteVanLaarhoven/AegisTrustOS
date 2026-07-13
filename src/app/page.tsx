@@ -62,7 +62,10 @@ export default function HomePage() {
             vendor onboarding.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/register" className={buttonClass("primary", "lg")}>
+            <Link href="/pilot" className={buttonClass("primary", "lg")}>
+              London pilot
+            </Link>
+            <Link href="/register" className={buttonClass("secondary", "lg")}>
               Enrol
             </Link>
             <Link href="/login" className={buttonClass("secondary", "lg")}>

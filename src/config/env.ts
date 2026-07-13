@@ -65,6 +65,25 @@ export function getEnv(): AppEnv {
     throw new Error("AUTH_SECRET must be set (≥32 chars) in production");
   }
 
+  // Production hardening — refuse open webhook endpoints when live backends are on
+  if (isProd) {
+    if (data.IDV_VENDOR !== "MOCK" && !data.IDV_WEBHOOK_SECRET) {
+      throw new Error(
+        "IDV_WEBHOOK_SECRET required in production when IDV_VENDOR is not MOCK",
+      );
+    }
+    if (data.PAYMENTS_BACKEND === "stripe" && !data.STRIPE_WEBHOOK_SECRET) {
+      throw new Error(
+        "STRIPE_WEBHOOK_SECRET required in production when PAYMENTS_BACKEND=stripe",
+      );
+    }
+    if (data.PAYMENTS_BACKEND === "stripe" && !data.STRIPE_SECRET_KEY) {
+      throw new Error(
+        "STRIPE_SECRET_KEY required in production when PAYMENTS_BACKEND=stripe",
+      );
+    }
+  }
+
   cached = {
     ...data,
     isProd,
